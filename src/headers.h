@@ -39,8 +39,11 @@ struct DirectoryHeader
 	uint32_t* directoryIds;
 	uint64_t creationTime;
 
+	bool saved;
+
 	void create();
-	std::vector<char> serialize();
+	void save(std::string path, uint64_t offsetEnc, uint8_t encryptionBit,uint64_t offsetHead, uint8_t storageMode);
+	void remove();
 };
 
 struct FileHeader
@@ -52,10 +55,12 @@ struct FileHeader
 	uint64_t fileSize;
 	uint64_t creationTime;
 	uint64_t offset;
+
+	bool saved;
 	
 	void create();
-	void deserialize(std::vector<char> data);
-	std::vector<char> serialize();
+	void save(std::string path, uint64_t offset);
+	void remove();
 };
 
 #endif // HEADERS_H

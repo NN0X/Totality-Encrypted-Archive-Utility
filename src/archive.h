@@ -65,6 +65,7 @@ public:
 private:
 	std::string pName;
 	std::string pPath;
+	std::string pFullPath;
 
 	uint32_t pCurrentDirectoryId; // 0 is top level directory
 	uint32_t pCurrentFileId; // 0 is NULL

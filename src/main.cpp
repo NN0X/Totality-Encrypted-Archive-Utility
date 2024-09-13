@@ -32,5 +32,6 @@ int main()
 	archive.save(); // saves archive to disk
 	*/
 
-	Archive archive("archive", ".");
+	Archive archive("archive", "");
+	archive.addFile("file1.txt");
 }

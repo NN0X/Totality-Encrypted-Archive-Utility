@@ -12,13 +12,12 @@ struct DirectoryTable
 {
 	uint64_t size;
 
-	std::vector<uint32_t> loadedTopLevelDirectoryIDs;
-	std::vector<uint32_t> loadedSubDirectoryIDs;
-	std::unordered_map<uint32_t, DirectoryHeader> loadedTopLevelDirectoryHeaders;
-	std::unordered_map<uint32_t, DirectoryHeader> loadedSubDirectoryHeaders;
+	std::vector<uint32_t> loadedDirectoryIDs;
+	std::unordered_map<uint32_t, DirectoryHeader> loadedDirectoryHeaders;
 
-	void load(std::string path, uint32_t idBegin, int count);
-	void save(std::string path);
+	void create();
+	void load(std::string path, uint32_t idBegin, int count); 
+	void unload(std::string path, uint32_t idBegin, int count);
 };
 
 struct FileTable
@@ -27,9 +26,10 @@ struct FileTable
 
 	std::vector<uint32_t> loadedFileIDs;
 	std::unordered_map<uint32_t, FileHeader> loadedFileHeaders;
-
+	
+	void create();
 	void load(std::string path, uint32_t idBegin, int count);
-	void save(std::string path);
+	void unload(std::string path, uint32_t idBegin, int count);
 };
 
 #endif // TABLES_H

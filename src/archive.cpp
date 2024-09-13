@@ -1,8 +1,18 @@
 #include <iostream>
 #include <fstream>
+#include <unistd.h>
 
 #include "archive.h"
 #include "headers.h"
+
+std::string getExecutablePathLinux()
+{
+	char result[255];
+	ssize_t count = readlink("/proc/self/exe", result, 255);
+	std::string path = std::string(result, (count > 0) ? count : 0);
+	path = path.substr(0, path.find_last_of("/"));
+	return path;
+}
 
 bool fileExists(std::string path)
 {
@@ -15,20 +25,23 @@ bool fileExists(std::string path)
 }
 
 Archive::Archive(std::string name, std::string path)
-	: pName(name), pPath(path)
+	: pName(name)
 {
-	std::string fullPath = path + "/" + name + ".tea";
-	bool exists = fileExists(fullPath);
+	pPath = getExecutablePathLinux() + "/" + path;
+
+	pFullPath = pPath + "/" + name + ".tea";
+	bool exists = fileExists(pFullPath);
 	if (exists)
 	{
-		pHeader.load(path);
-		std::cout << "Archive loaded successfully!" << std::endl;
+		pHeader.load(pFullPath);
+		pDirectoryTable.load(pFullPath, 0, pHeader.numDirectories);
+		pFileTable.load(pFullPath, 0, pHeader.numFiles);
 	}
 	else
 	{
 		pHeader.create();
-		pHeader.save(fullPath);
-		std::cout << "Archive created successfully!" << std::endl;
+		pDirectoryTable.create();
+		pFileTable.create();
 	}	
 
 	pCurrentDirectoryId = 0;
@@ -43,6 +56,7 @@ Archive::Archive(std::string name, std::string path)
 
 Archive::~Archive()
 {
+	pHeader.save(pFullPath);
 }
 
 void Archive::printCurrentFile()
