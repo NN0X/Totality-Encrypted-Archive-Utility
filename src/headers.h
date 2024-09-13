@@ -1,6 +1,9 @@
 #ifndef HEADERS_H
 #define HEADERS_H
 
+#include <cstdint>
+#include <vector>
+
 struct Header
 {
 	uint8_t size;
@@ -18,8 +21,10 @@ struct Header
 	uint32_t numFiles;
 	uint64_t totalSize;
 	uint64_t creationTime;
-
+	
+	void create();
 	void load(std::string path);
+	void save(std::string path);
 };
 
 struct DirectoryHeader
@@ -33,6 +38,9 @@ struct DirectoryHeader
 	uint32_t numDirectories;
 	uint32_t* directoryIds;
 	uint64_t creationTime;
+
+	void create();
+	std::vector<char> serialize();
 };
 
 struct FileHeader
@@ -44,7 +52,10 @@ struct FileHeader
 	uint64_t fileSize;
 	uint64_t creationTime;
 	uint64_t offset;
-
+	
+	void create();
+	void deserialize(std::vector<char> data);
+	std::vector<char> serialize();
 };
 
 #endif // HEADERS_H

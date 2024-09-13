@@ -1,6 +1,7 @@
 #ifndef ARCHIVE_H
 #define ARCHIVE_H
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 
@@ -19,8 +20,6 @@ public:
 	Archive(std::string name, std::string path);
 	~Archive();
 	
-	void save();
-
 	void printCurrentFile();
 	void printCurrentDirectory();
 
@@ -56,10 +55,9 @@ public:
 	void decryptDirectory();
 
 	uint16_t getRamLimit();
-	uint16_t getRamUsage();
-
+	uint16_t calculateRamUsage();
 	uint64_t getStorageLimit();
-	uint64_t getStorageUsage();
+	uint64_t calculateStorageUsage();
 
 	std::string getName();
 	std::string getPath();
@@ -72,14 +70,14 @@ private:
 	uint32_t pCurrentFileId; // 0 is NULL
 
 	uint16_t pRamLimit; // in MiB
-	uint16_t pRamUsage; // in MiB
-	
-	uint64_t pStorageLimit; // in MiB
-	uint64_t pStorageUsage; // in MiB
+	uint16_t pStorageLimit; // in MiB
 
 	Header pHeader;
 	DirectoryTable pDirectoryTable;
 	FileTable pFileTable;
+
+	uint64_t pLargestFileID;
+	uint64_t pLargestDirectoryID;
 };
 
 #endif // ARCHIVE_H
@@ -87,15 +85,14 @@ private:
 
 // Archive Format
 
-// all header fields are in little endian
-// 
+// archive is in little endian
+//
 // ---------------------
-// (5, 7, 19, 27) bytes - max size of header in bytes
 // HEADER
 // 1 bytes - header size in bytes (including this field)
 //
-// 1 bytes - flags (compression, encryption, endianess excluding header, 2 bits for storage mode, 2 bits for compression level, 1 bit reserved)
-// 	storage mode (size of headers):
+// 1 bytes - flags (compression, encryption, 2 bits for storage mode, 2 bits for compression level, 2 bits reserved)
+//	storage mode (size of headers):
 //		0 - very low <- this is for extreme cases 
 //		1 - low 
 //		2 - medium 

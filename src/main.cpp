@@ -4,6 +4,7 @@
 
 int main()
 {
+	/*
 	Archive archive("archive", "");
 	archive.addFile("file1.txt"); // adds file1.txt from current directory to top level archive directory
 	archive.addFile("file2.png"); // adds file2.png from current directory to top level archive directory
@@ -29,4 +30,7 @@ int main()
 
 	archive.encryptBRUTUS(); // encrypts the archive using BRUTUS algorithm
 	archive.save(); // saves archive to disk
+	*/
+
+	Archive archive("archive", ".");
 }
