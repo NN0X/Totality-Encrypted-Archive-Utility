@@ -33,30 +33,32 @@ Archive::Archive(std::string name, std::string path)
 	bool exists = fileExists(pFullPath);
 	if (exists)
 	{
-		pHeader.load(pFullPath);
-		pDirectoryTable.load(pFullPath, 0, pHeader.numDirectories);
-		pFileTable.load(pFullPath, 0, pHeader.numFiles);
+		pArchiveHeader.load(pFullPath);
+		pDirectoryTable.load(pFullPath, 0, pArchiveHeader.numDirectories);
+		pFileTable.load(pFullPath, 0, pArchiveHeader.numFiles);
 	}
 	else
 	{
-		pHeader.create();
-		pDirectoryTable.create();
-		pFileTable.create();
+		pArchiveHeader = ArchiveHeader();
+		pDirectoryTable = DirectoryTable(pArchiveHeader.pStorageMode);
+		pFileTable = FileTable(pArchiveHeader.pStorageMode);
 	}	
 
-	pCurrentDirectoryId = 0;
-	pCurrentFileId = 0;
+	pCurrentDirectoryID = 0;
+	pCurrentFileID = 0;
 
 	pRamLimit = 4096; // 4 GiB
 	pStorageLimit = 1024*1024*50; // 50 GiB
 	
-	pLargestDirectoryID = 0;
-	pLargestFileID = 0;
+	pDirectoryLastID = 0;
+	pFileLastID = 0;
 }
 
 Archive::~Archive()
 {
-	pHeader.save(pFullPath);
+	pArchiveHeader.save(pFullPath);
+	pDirectoryTable.unload(pFullPath, 0, pArchiveHeader.numDirectories);
+	pFileTable.unload(pFullPath, 0, pArchiveHeader.numFiles);
 }
 
 void Archive::printCurrentFile()
@@ -77,9 +79,18 @@ void Archive::printDirectoriesTree()
 
 void Archive::addFile(std::string filePath)
 {
+	pFileTable.addFile(filePath, pFileLastID);
+	pCurrentFileID = pFileLastID;
+	
+	if (pCurrentDirectoryID != 0)
+		pDirectoryTable.loadedDirectoryHeaders[pCurrentDirectoryID].addFile(pCurrentFileID);
+
+	pArchiveHeader.numFiles++
+	pArchiveHeader.totalSize += pFileTable.loadedFileHeaders[pCurrentFileID].pSize;
+	pArchiveHeader.save(pFullPath);
 }
 
-void Archive::removeFile(std::string filePath)
+void Archive::eraseFile(std::string fileName)
 {
 }
 
@@ -87,7 +98,11 @@ void Archive::addDirectory(std::string directoryPath)
 {
 }
 
-void Archive::removeDirectory(std::string directoryPath)
+void Archive::eraseDirectory(std::string directoryName)
+{
+}
+
+void Archive::rebuild()
 {
 }
 

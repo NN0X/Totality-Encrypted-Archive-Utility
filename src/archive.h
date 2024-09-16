@@ -11,6 +11,8 @@
 struct FileData
 {
 	uint64_t size;
+	uint64_t offset;
+
 	uint8_t* data;
 };
 
@@ -27,11 +29,13 @@ public:
 	void printDirectoriesTree();
 
 	void addFile(std::string filePath);
-	void removeFile(std::string filePath);
+	void eraseFile(std::string fileName); // zero out the data and remove the file from the file table
 
 	void addDirectory(std::string directoryPath);
-	void removeDirectory(std::string directoryPath);
-	
+	void eraseDirectory(std::string directoryName); // remove the directory from the directory table and erase all files in it
+
+	void rebuild(); // remove all zeroed out bytes and reorganize the archive(sort ids, etc.)
+
 	void setFile(std::string fileName);
 	void setDirectory(std::string directoryName);
 
@@ -67,18 +71,18 @@ private:
 	std::string pPath;
 	std::string pFullPath;
 
-	uint32_t pCurrentDirectoryId; // 0 is top level directory
-	uint32_t pCurrentFileId; // 0 is NULL
+	uint32_t pCurrentDirectoryID; // 0 is top level directory
+	uint32_t pCurrentFileID; // 0 is NULL
 
 	uint16_t pRamLimit; // in MiB
 	uint16_t pStorageLimit; // in MiB
 
-	Header pHeader;
+	ArchiveHeader pArchiveHeader;
 	DirectoryTable pDirectoryTable;
 	FileTable pFileTable;
 
-	uint64_t pLargestFileID;
-	uint64_t pLargestDirectoryID;
+	uint64_t pFileLastID;
+	uint64_t pDirectoryLastID;
 };
 
 #endif // ARCHIVE_H
@@ -108,7 +112,8 @@ private:
 // (0, 1, 2, 3) bytes - number of directories
 // (1, 2, 3, 4) bytes - number of files
 // (0, 0, 6, 8) bytes - total size of all files (without header, without file and directory tables) before compression in bytes
-// (0, 0, 4, 8) bytes - epoch time of creation of this archive 
+// (0, 0, 4, 8) bytes - epoch time of creation of this archive
+// (0, 0, 4, 8) bytes - number of zeroed out bytes (including all tables and file data)
 //
 // if compression flag is set:
 // 	1 bytes - compression method
@@ -119,13 +124,11 @@ private:
 // ---------------------
 // DIRECTORY TABLE
 // (0, 3, 6, 8) bytes - size of directory table in bytes (including this field)
-//
-// for each 4 directories: (i = 1, ... , number of directories / 4)
-// 	(0, 1, 1, 1) bytes - directory encryption and top flag (if set, this directory is encrypted separately)
-// 	// 0 1 0 0 0 0 1 0 <- this means that 4*i directory table entry is encrypted and 1*i directory table entry is a top level directory
 // 
 // for each directory: 
 // 	(0, 2, 4, 5) bytes - directory header size in bytes (including this field)
+// 	(0, 1, 1, 1) bytes - flags (1 bit for encryption, 7 bits reserved)
+// 	(0, 1, 2, 3) bytes - directory id (unique, in most basic case, it is the index of the directory in the directory table)
 // 	(0, 1, 2, 2) bytes - directory name length in bytes
 // 	(0, n, n, n) bytes - directory name
 // 	(0, 1, 3, 4) bytes - number of files in this directory
@@ -140,6 +143,7 @@ private:
 //
 // for each file: 
 // 	(2, 2, 3, 4) bytes - file header size in bytes (including this field)
+// 	(1, 1, 1, 1) bytes - flags (1 bit for encryption, 7 bits reserved)
 // 	(1, 2, 3, 4) bytes - file id (unique, in most basic case, it is the index of the file in the file table)
 // 	(1, 1, 2, 2) bytes - file name length in bytes
 // 	(n, n, n, n) bytes - file name

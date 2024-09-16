@@ -8,28 +8,35 @@
 
 #include "headers.h"
 
-struct DirectoryTable
+class DirectoryTable
 {
-	uint64_t size;
+public:
+	DirectoryTable(uint8_t storageMode);
+
+	uint64_t pSize;
+	uint8_t pStorageMode;
 
 	std::vector<uint32_t> loadedDirectoryIDs;
 	std::unordered_map<uint32_t, DirectoryHeader> loadedDirectoryHeaders;
 
-	void create();
-	void load(std::string path, uint32_t idBegin, int count); 
+	void load(std::string path, uint32_t idBegin, int count);
 	void unload(std::string path, uint32_t idBegin, int count);
 };
 
-struct FileTable
+class FileTable
 {
-	uint64_t size;
+public:
+	FileTable(uint8_t storageMode);
+
+	uint64_t pSize;
+	uint8_t pStorageMode;
 
 	std::vector<uint32_t> loadedFileIDs;
 	std::unordered_map<uint32_t, FileHeader> loadedFileHeaders;
 	
-	void create();
 	void load(std::string path, uint32_t idBegin, int count);
 	void unload(std::string path, uint32_t idBegin, int count);
+	void addFile(std::string path, uint64_t &id);
 };
 
 #endif // TABLES_H

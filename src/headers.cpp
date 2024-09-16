@@ -33,22 +33,22 @@
 // 	1 bytes - encryption method
 //
 
-void Header::create()
+ArchiveHeader::ArchiveHeader() // temp
 {
-	size = 25; // size of header in high storage mode with no compression and no encryption
-	compression = 0;
-	encryption = 0;
-	storageMode = 3;
-	compressionLevel = 0;
-	numDirectories = 0;
-	numFiles = 0;
-	totalSize = 0;
-	creationTime = 0;
-	compressionMethod = 0;
-	encryptionMethod = 0;
+	pSize = 33; // size of header in high storage mode with no compression and no encryption
+	pCompression = 0;
+	pEncryption = 0;
+	pStorageMode = 3;
+	pCompressionLevel = 0;
+	pNumDirectories = 0;
+	pNumFiles = 0;
+	pTotalSize = 0;
+	pCreationTime = 0;
+	pCompressionMethod = 0;
+	pEncryptionMethod = 0;
 }
 
-void Header::load(std::string path)
+void ArchiveHeader::load(std::string path)
 {
 	std::ifstream file(path, std::ios::binary);
 	if (!file.is_open())
@@ -61,55 +61,57 @@ void Header::load(std::string path)
 
 	uint8_t flags;
 	file.read(reinterpret_cast<char*>(&flags), 1);
-	compression = flags & 0b10000000;
-	encryption = flags & 0b01000000;
-	storageMode = flags & 0b00110000;
-	compressionLevel = flags & 0b00001100;
+	pCompression = flags & 0b10000000;
+	pEncryption = flags & 0b01000000;
+	pStorageMode = flags & 0b00110000;
+	pCompressionLevel = flags & 0b00001100;
 
-	switch (storageMode)
+	switch (pStorageMode)
 	{
 	case 0:
-		numDirectories = 0;
-		totalSize = 0;
-		creationTime = 0;
-		file.read(reinterpret_cast<char*>(&numFiles), 1);
+		pNumDirectories = 0;
+		pTotalSize = 0;
+		pCreationTime = 0;
+		file.read(reinterpret_cast<char*>(&pNumFiles), 1);
 		break;
 	case 1:
-		totalSize = 0;
-		creationTime = 0;
-		file.read(reinterpret_cast<char*>(&numDirectories), 1);
-		file.read(reinterpret_cast<char*>(&numFiles), 2);
+		pTotalSize = 0;
+		pCreationTime = 0;
+		file.read(reinterpret_cast<char*>(&pNumDirectories), 1);
+		file.read(reinterpret_cast<char*>(&pNumFiles), 2);
 		break;
 	case 2:
-		file.read(reinterpret_cast<char*>(&numDirectories), 2);
-		file.read(reinterpret_cast<char*>(&numFiles), 3);
-		file.read(reinterpret_cast<char*>(&totalSize), 6);
-		file.read(reinterpret_cast<char*>(&creationTime), 4);
+		file.read(reinterpret_cast<char*>(&pNumDirectories), 2);
+		file.read(reinterpret_cast<char*>(&pNumFiles), 3);
+		file.read(reinterpret_cast<char*>(&pNotalSize), 6);
+		file.read(reinterpret_cast<char*>(&pCreationTime), 4);
+		file.read(reinterpret_cast<char*>(&pZeroedOutBytes), 4);
 		break;
 	case 3:
-		file.read(reinterpret_cast<char*>(&numDirectories), 3);
-		file.read(reinterpret_cast<char*>(&numFiles), 4);
-		file.read(reinterpret_cast<char*>(&totalSize), 8);
-		file.read(reinterpret_cast<char*>(&creationTime), 8);
+		file.read(reinterpret_cast<char*>(&pNumDirectories), 3);
+		file.read(reinterpret_cast<char*>(&pNumFiles), 4);
+		file.read(reinterpret_cast<char*>(&pTotalSize), 8);
+		file.read(reinterpret_cast<char*>(&pCreationTime), 8);
+		file.read(reinterpret_cast<char*>(&pZeroedOutBytes), 8);
 		break;
 	}
 
-	if (compression)
-		file.read(reinterpret_cast<char*>(&compressionMethod), 1);
-	if (encryption)
-		file.read(reinterpret_cast<char*>(&encryptionMethod), 1);
+	if (pCompression)
+		file.read(reinterpret_cast<char*>(&pCompressionMethod), 1);
+	if (pEncryption)
+		file.read(reinterpret_cast<char*>(&pEncryptionMethod), 1);
 }
 
-void Header::save(std::string path)
+void ArchiveHeader::save(std::string path)
 {
 	std::vector<char> data;
-	data.reserve(size);
-	data.push_back(size);
+	data.reserve(pSize);
+	data.push_back(pSize);
 	char flags = 0;
-	flags |= compression << 7;
-	flags |= encryption << 6;
-	flags |= storageMode << 4;
-	flags |= compressionLevel << 2;
+	flags |= pCompression << 7;
+	flags |= pEncryption << 6;
+	flags |= pStorageMode << 4;
+	flags |= pCompressionLevel << 2;
 	data.push_back(flags);
 	
 
@@ -117,38 +119,39 @@ void Header::save(std::string path)
 	char numFilesBytes[4];
 	char totalSizeBytes[8];
 	char creationTimeBytes[8];
+	char numZeroedOutBytes[8];
 
-	switch (storageMode)
+	switch (pStorageMode)
 	{
 	case 0:
-		data.push_back(numFiles);
+		data.push_back(pNumFiles);
 		break;
 	case 1:
-		data.push_back(numDirectories);
-		numFilesBytes[0] = numFiles & 0b11111111;
-		numFilesBytes[1] = (numFiles >> 8) & 0b11111111; 
+		data.push_back(pNumDirectories);
+		numFilesBytes[0] = pNumFiles & 0b11111111;
+		numFilesBytes[1] = (pNumFiles >> 8) & 0b11111111; 
 		data.push_back(numFilesBytes[0]);
 		data.push_back(numFilesBytes[1]);
 		break;
 	case 2:
-		numDirectoriesBytes[0] = numDirectories & 0b11111111;
-		numDirectoriesBytes[1] = (numDirectories >> 8) & 0b11111111;
+		numDirectoriesBytes[0] = pNumDirectories & 0b11111111;
+		numDirectoriesBytes[1] = (pNumDirectories >> 8) & 0b11111111;
 		data.push_back(numDirectoriesBytes[0]);
 		data.push_back(numDirectoriesBytes[1]);
 
-		numFilesBytes[0] = numFiles & 0b11111111;
-		numFilesBytes[1] = (numFiles >> 8) & 0b11111111;
-		numFilesBytes[2] = (numFiles >> 16) & 0b11111111;
+		numFilesBytes[0] = pNumFiles & 0b11111111;
+		numFilesBytes[1] = (pNumFiles >> 8) & 0b11111111;
+		numFilesBytes[2] = (pNumFiles >> 16) & 0b11111111;
 		data.push_back(numFilesBytes[0]);
 		data.push_back(numFilesBytes[1]);
 		data.push_back(numFilesBytes[2]);
 
-		totalSizeBytes[0] = totalSize & 0b11111111;
-		totalSizeBytes[1] = (totalSize >> 8) & 0b11111111;
-		totalSizeBytes[2] = (totalSize >> 16) & 0b11111111;
-		totalSizeBytes[3] = (totalSize >> 24) & 0b11111111;
-		totalSizeBytes[4] = (totalSize >> 32) & 0b11111111;
-		totalSizeBytes[5] = (totalSize >> 40) & 0b11111111;
+		totalSizeBytes[0] = pTotalSize & 0b11111111;
+		totalSizeBytes[1] = (pTotalSize >> 8) & 0b11111111;
+		totalSizeBytes[2] = (pTotalSize >> 16) & 0b11111111;
+		totalSizeBytes[3] = (pTotalSize >> 24) & 0b11111111;
+		totalSizeBytes[4] = (pTotalSize >> 32) & 0b11111111;
+		totalSizeBytes[5] = (pTotalSize >> 40) & 0b11111111;
 		data.push_back(totalSizeBytes[0]);
 		data.push_back(totalSizeBytes[1]);
 		data.push_back(totalSizeBytes[2]);
@@ -156,40 +159,49 @@ void Header::save(std::string path)
 		data.push_back(totalSizeBytes[4]);
 		data.push_back(totalSizeBytes[5]);
 
-		creationTimeBytes[0] = creationTime & 0b11111111;
-		creationTimeBytes[1] = (creationTime >> 8) & 0b11111111;
-		creationTimeBytes[2] = (creationTime >> 16) & 0b11111111;
-		creationTimeBytes[3] = (creationTime >> 24) & 0b11111111;
+		creationTimeBytes[0] = pCreationTime & 0b11111111;
+		creationTimeBytes[1] = (pCreationTime >> 8) & 0b11111111;
+		creationTimeBytes[2] = (pCreationTime >> 16) & 0b11111111;
+		creationTimeBytes[3] = (pCreationTime >> 24) & 0b11111111;
 		data.push_back(creationTimeBytes[0]);
 		data.push_back(creationTimeBytes[1]);
 		data.push_back(creationTimeBytes[2]);
 		data.push_back(creationTimeBytes[3]);
+
+		numZeroedOutBytes[0] = pZeroedOutBytes & 0b11111111;
+		numZeroedOutBytes[1] = (pZeroedOutBytes >> 8) & 0b11111111;
+		numZeroedOutBytes[2] = (pZeroedOutBytes >> 16) & 0b11111111;
+		numZeroedOutBytes[3] = (pZeroedOutBytes >> 24) & 0b11111111;
+		data.push_back(numZeroedOutBytes[0]);
+		data.push_back(numZeroedOutBytes[1]);
+		data.push_back(numZeroedOutBytes[2]);
+		data.push_back(numZeroedOutBytes[3]);
 		break;
 	case 3:
-		numDirectoriesBytes[0] = numDirectories & 0b11111111;
-		numDirectoriesBytes[1] = (numDirectories >> 8) & 0b11111111;
-		numDirectoriesBytes[2] = (numDirectories >> 16) & 0b11111111;
+		numDirectoriesBytes[0] = pNumDirectories & 0b11111111;
+		numDirectoriesBytes[1] = (pNumDirectories >> 8) & 0b11111111;
+		numDirectoriesBytes[2] = (pNumDirectories >> 16) & 0b11111111;
 		data.push_back(numDirectoriesBytes[0]);
 		data.push_back(numDirectoriesBytes[1]);
 		data.push_back(numDirectoriesBytes[2]);
 
-		numFilesBytes[0] = numFiles & 0b11111111;
-		numFilesBytes[1] = (numFiles >> 8) & 0b11111111;
-		numFilesBytes[2] = (numFiles >> 16) & 0b11111111;
-		numFilesBytes[3] = (numFiles >> 24) & 0b11111111;
+		numFilesBytes[0] = pNumFiles & 0b11111111;
+		numFilesBytes[1] = (pNumFiles >> 8) & 0b11111111;
+		numFilesBytes[2] = (pNumFiles >> 16) & 0b11111111;
+		numFilesBytes[3] = (pNumFiles >> 24) & 0b11111111;
 		data.push_back(numFilesBytes[0]);
 		data.push_back(numFilesBytes[1]);
 		data.push_back(numFilesBytes[2]);
 		data.push_back(numFilesBytes[3]);
 	
-		totalSizeBytes[0] = totalSize & 0b11111111;
-		totalSizeBytes[1] = (totalSize >> 8) & 0b11111111;
-		totalSizeBytes[2] = (totalSize >> 16) & 0b11111111;
-		totalSizeBytes[3] = (totalSize >> 24) & 0b11111111;
-		totalSizeBytes[4] = (totalSize >> 32) & 0b11111111;
-		totalSizeBytes[5] = (totalSize >> 40) & 0b11111111;
-		totalSizeBytes[6] = (totalSize >> 48) & 0b11111111;
-		totalSizeBytes[7] = (totalSize >> 56) & 0b11111111;
+		totalSizeBytes[0] = pTotalSize & 0b11111111;
+		totalSizeBytes[1] = (pTotalSize >> 8) & 0b11111111;
+		totalSizeBytes[2] = (pTotalSize >> 16) & 0b11111111;
+		totalSizeBytes[3] = (pTotalSize >> 24) & 0b11111111;
+		totalSizeBytes[4] = (pTotalSize >> 32) & 0b11111111;
+		totalSizeBytes[5] = (pTotalSize >> 40) & 0b11111111;
+		totalSizeBytes[6] = (pTotalSize >> 48) & 0b11111111;
+		totalSizeBytes[7] = (pTotalSize >> 56) & 0b11111111;
 		data.push_back(totalSizeBytes[0]);
 		data.push_back(totalSizeBytes[1]);
 		data.push_back(totalSizeBytes[2]);
@@ -199,14 +211,14 @@ void Header::save(std::string path)
 		data.push_back(totalSizeBytes[6]);
 		data.push_back(totalSizeBytes[7]);
 
-		creationTimeBytes[0] = creationTime & 0b11111111;
-		creationTimeBytes[1] = (creationTime >> 8) & 0b11111111;	
-		creationTimeBytes[2] = (creationTime >> 16) & 0b11111111;
-		creationTimeBytes[3] = (creationTime >> 24) & 0b11111111;
-		creationTimeBytes[4] = (creationTime >> 32) & 0b11111111;
-		creationTimeBytes[5] = (creationTime >> 40) & 0b11111111;
-		creationTimeBytes[6] = (creationTime >> 48) & 0b11111111;
-		creationTimeBytes[7] = (creationTime >> 56) & 0b11111111;
+		creationTimeBytes[0] = pCreationTime & 0b11111111;
+		creationTimeBytes[1] = (pCreationTime >> 8) & 0b11111111;	
+		creationTimeBytes[2] = (pCreationTime >> 16) & 0b11111111;
+		creationTimeBytes[3] = (pCreationTime >> 24) & 0b11111111;
+		creationTimeBytes[4] = (pCreationTime >> 32) & 0b11111111;
+		creationTimeBytes[5] = (pCreationTime >> 40) & 0b11111111;
+		creationTimeBytes[6] = (pCreationTime >> 48) & 0b11111111;
+		creationTimeBytes[7] = (pCreationTime >> 56) & 0b11111111;
 		data.push_back(creationTimeBytes[0]);
 		data.push_back(creationTimeBytes[1]);
 		data.push_back(creationTimeBytes[2]);
@@ -215,18 +227,35 @@ void Header::save(std::string path)
 		data.push_back(creationTimeBytes[5]);
 		data.push_back(creationTimeBytes[6]);
 		data.push_back(creationTimeBytes[7]);
+
+		numZeroedOutBytes[0] = pZeroedOutBytes & 0b11111111;
+		numZeroedOutBytes[1] = (pZeroedOutBytes >> 8) & 0b11111111;
+		numZeroedOutBytes[2] = (pZeroedOutBytes >> 16) & 0b11111111;
+		numZeroedOutBytes[3] = (pZeroedOutBytes >> 24) & 0b11111111;
+		numZeroedOutBytes[4] = (pZeroedOutBytes >> 32) & 0b11111111;
+		numZeroedOutBytes[5] = (pZeroedOutBytes >> 40) & 0b11111111;
+		numZeroedOutBytes[6] = (pZeroedOutBytes >> 48) & 0b11111111;
+		numZeroedOutBytes[7] = (pZeroedOutBytes >> 56) & 0b11111111;
+		data.push_back(numZeroedOutBytes[0]);
+		data.push_back(numZeroedOutBytes[1]);
+		data.push_back(numZeroedOutBytes[2]);
+		data.push_back(numZeroedOutBytes[3]);
+		data.push_back(numZeroedOutBytes[4]);
+		data.push_back(numZeroedOutBytes[5]);
+		data.push_back(numZeroedOutBytes[6]);
+		data.push_back(numZeroedOutBytes[7]);
 		break;
 	}
 
-	if (compression)
-		data.push_back(compressionMethod);
-	if (encryption)
-		data.push_back(encryptionMethod);
+	if (pCompression)
+		data.push_back(pCompressionMethod);
+	if (pEncryption)
+		data.push_back(pEncryptionMethod);
 
-	if (data.size() != size)
+	if (data.size() != pSize)
 	{
 		std::cerr << "Error: header size mismatch" << std::endl;
-		std::cerr << "Expected size: " << (unsigned int)size << std::endl;
+		std::cerr << "Expected size: " << (unsigned int)pSize << std::endl;
 		std::cerr << "Actual size: " << data.size() << std::endl;
 		return;
 	}
@@ -243,201 +272,320 @@ void Header::save(std::string path)
 
 //---------------------
 
-void DirectoryHeader::create()
+DirectoryHeader::DirectoryHeader()
 {
-	encryption = false;
-	size = 0;
-	nameLength = 0;
-	name = nullptr;
-	numFiles = 0;
-	fileIds = nullptr;
-	numDirectories = 0;
-	directoryIds = nullptr;
-	creationTime = 0;
-	saved = false;
+	pEncryption = false;
+	pSize = 0;
+	pID = 0;
+	pNameLength = 0;
+	pName = "";
+	pNumFiles = 0;
+	pFileIDs = std::vector<uint32_t>();
+	pNumDirectories = 0;
+	pDirectoryIDs = std::vector<uint32_t>();
+	pCreationTime = 0;
+	pSaved = false;
+	pHeaderOffset = 0;
 }
 
-void DirectoryHeader::save(std::string path, uint64_t offsetEnc, uint8_t encryptionBit,uint64_t offsetHead, uint8_t storageMode)
+void DirectoryHeader::load(std::string path, uint8_t storageMode)
+{
+	std::ifstream file(path, std::ios::binary);
+	if (!file.is_open())
+	{
+		std::cerr << "Error: could not open file " << path << std::endl;
+		return;
+	}
+
+	char flags;
+
+	file.seekg(pHeaderOffset);
+	
+	switch (storageMode)
+	{
+	case 1:
+		file.read(reinterpret_cast<char*>(&pSize), 2);
+		file.read(reinterpret_cast<char*>(&flags), 1);
+		file.read(reinterpret_cast<char*>(&pID), 1);
+		file.read(reinterpret_cast<char*>(&pNameLength), 1);
+		pName = std::string(pNameLength, 0);
+		for (int i = 0; i < pNameLength; i++)
+		{
+			file.read(&pName[i], 1);
+		}
+		file.read(reinterpret_cast<char*>(&pNumFiles), 1);
+		file.read(reinterpret_cast<char*>(&pNumDirectories), 1);
+		pFileIDs = std::vector<uint32_t>(pNumFiles, 0);
+		for (int i = 0; i < pNumFiles; i++)
+		{
+			file.read(reinterpret_cast<char*>(&pFileIDs[i]), 2);
+		}
+		pDirectoryIDs = std::vector<uint32_t>(pNumDirectories, 0);
+		for (int i = 0; i < pNumDirectories; i++)
+		{
+			file.read(reinterpret_cast<char*>(&pDirectoryIDs[i]), 1);
+		}
+		break;
+
+	case 2:
+		file.read(reinterpret_cast<char*>(&pSize), 4);
+		file.read(reinterpret_cast<char*>(&flags), 1);
+		file.read(reinterpret_cast<char*>(&pID), 2);
+		file.read(reinterpret_cast<char*>(&pNameLength), 2);
+		pName = std::string(pNameLength, 0);
+		for (int i = 0; i < pNameLength; i++)
+		{
+			file.read(&pName[i], 1);
+		}
+		file.read(reinterpret_cast<char*>(&pNumFiles), 3);
+		file.read(reinterpret_cast<char*>(&pNumDirectories), 3);
+		pFileIDs = std::vector<uint32_t>(pNumFiles, 0);
+		for (int i = 0; i < pNumFiles; i++)
+		{
+			file.read(reinterpret_cast<char*>(&pFileIDs[i]), 3);
+		}
+		pDirectoryIDs = std::vector<uint32_t>(pNumDirectories, 0);
+		for (int i = 0; i < pNumDirectories; i++)
+		{
+			file.read(reinterpret_cast<char*>(&pDirectoryIDs[i]), 2);
+		}
+		file.read(reinterpret_cast<char*>(&pCreationTime), 4);
+		break;
+	case 3:
+		file.read(reinterpret_cast<char*>(&pSize), 5);
+		file.read(reinterpret_cast<char*>(&flags), 1);
+		file.read(reinterpret_cast<char*>(&pID), 3);
+		file.read(reinterpret_cast<char*>(&pNameLength), 2);
+		pName = std::string(pNameLength, 0);
+		for (int i = 0; i < pNameLength; i++)
+		{
+			file.read(&pName[i], 1);
+		}
+		file.read(reinterpret_cast<char*>(&pNumFiles), 4);
+		file.read(reinterpret_cast<char*>(&pNumDirectories), 4);
+		pFileIDs = std::vector<uint32_t>(pNumFiles, 0);
+		for (int i = 0; i < pNumFiles; i++)
+		{
+			file.read(reinterpret_cast<char*>(&pFileIDs[i]), 4);
+		}
+		pDirectoryIDs = std::vector<uint32_t>(pNumDirectories, 0);
+		for (int i = 0; i < pNumDirectories; i++)
+		{
+			file.read(reinterpret_cast<char*>(&pDirectoryIDs[i]), 3);
+		}
+		file.read(reinterpret_cast<char*>(&pCreationTime), 8);
+		break;
+	}
+	file.close();
+
+	saved = true;
+}
+
+void DirectoryHeader::save(std::string path, uint8_t storageMode)
 {	
 	std::vector<char> data;
 	data.reserve(size);
 
 	char sizeBytes[5];
+	char flag = 0;
+	char idBytes[3];
 	char nameLengthBytes[2];
 	char numFilesBytes[4];
 	char numDirectoriesBytes[4];
 	char fileIdBytes[4];
 	char directoryIdBytes[3];
 	char creationTimeBytes[8];
+	
+	flag |= encryption << 7;
 
 	switch (storageMode)
 	{
 	case 1:
-		sizeBytes[0] = size & 0b11111111;
-		sizeBytes[1] = (size >> 8) & 0b11111111;
+		sizeBytes[0] = pSize & 0b11111111;
+		sizeBytes[1] = (pSize >> 8) & 0b11111111;
 		data.push_back(sizeBytes[0]);
 		data.push_back(sizeBytes[1]);
-
-		nameLengthBytes[0] = nameLength & 0b11111111;
-		data.push_back(nameLengthBytes[0]);
 		
-		for (int i = 0; i < nameLength; i++)
+		data.push_back(flag);
+
+		idBytes[0] = pID & 0b11111111;
+		data.push_back(idBytes[0]);
+
+		nameLengthBytes[0] = pNameLength & 0b11111111;
+		data.push_back(nameLengthBytes[0]);
+
+		for (int i = 0; i < pNameLength; i++)
 		{
-			data.push_back(name[i]);
+			data.push_back(pName[i]);
 		}
 
-		numFilesBytes[0] = numFiles & 0b11111111;
+		numFilesBytes[0] = pNumFiles & 0b11111111;
 		data.push_back(numFilesBytes[0]);
 
-		numDirectoriesBytes[0] = numDirectories & 0b11111111;
+		numDirectoriesBytes[0] = pNumDirectories & 0b11111111;
 		data.push_back(numDirectoriesBytes[0]);
 
-		for (int i = 0; i < numFiles; i++)
+		for (int i = 0; i < pNumFiles; i++)
 		{
-			fileIdBytes[0] = fileIds[i] & 0b11111111;
-			fileIdBytes[1] = (fileIds[i] >> 8) & 0b11111111;
+			fileIdBytes[0] = pFileIDs[i] & 0b11111111;
+			fileIdBytes[1] = (pFileIDs[i] >> 8) & 0b11111111;
 			data.push_back(fileIdBytes[0]);
 			data.push_back(fileIdBytes[1]);
 		}
 
-		for (int i = 0; i < numDirectories; i++)
+		for (int i = 0; i < pNumDirectories; i++)
 		{
-			directoryIdBytes[0] = directoryIds[i] & 0b11111111;
+			directoryIdBytes[0] = pDirectoryIDs[i] & 0b11111111;
 			data.push_back(directoryIdBytes[0]);
 		}
 		break;
 	case 2:
-		sizeBytes[0] = size & 0b11111111;
-		sizeBytes[1] = (size >> 8) & 0b11111111;
-		sizeBytes[2] = (size >> 16) & 0b11111111;
-		sizeBytes[3] = (size >> 24) & 0b11111111;
+		sizeBytes[0] = pSize & 0b11111111;
+		sizeBytes[1] = (pSize >> 8) & 0b11111111;
+		sizeBytes[2] = (pSize >> 16) & 0b11111111;
+		sizeBytes[3] = (pSize >> 24) & 0b11111111;
 		data.push_back(sizeBytes[0]);
 		data.push_back(sizeBytes[1]);
 		data.push_back(sizeBytes[2]);
 		data.push_back(sizeBytes[3]);
 
-		nameLengthBytes[0] = nameLength & 0b11111111;
-		nameLengthBytes[1] = (nameLength >> 8) & 0b11111111;
+		data.push_back(flag);
+
+		idBytes[0] = pID & 0b11111111;
+		idBytes[1] = (pID >> 8) & 0b11111111;
+		data.push_back(idBytes[0]);
+		data.push_back(idBytes[1]);
+
+		nameLengthBytes[0] = pNameLength & 0b11111111;
+		nameLengthBytes[1] = (pNameLength >> 8) & 0b11111111;
 		data.push_back(nameLengthBytes[0]);
 		data.push_back(nameLengthBytes[1]);
 
-		for (int i = 0; i < nameLength; i++)
+		for (int i = 0; i < pNameLength; i++)
 		{
-			data.push_back(name[i]);
+			data.push_back(pName[i]);
 		}
 
-		numFilesBytes[0] = numFiles & 0b11111111;
-		numFilesBytes[1] = (numFiles >> 8) & 0b11111111;
-		numFilesBytes[2] = (numFiles >> 16) & 0b11111111;
+		numFilesBytes[0] = pNumFiles & 0b11111111;
+		numFilesBytes[1] = (pNumFiles >> 8) & 0b11111111;
+		numFilesBytes[2] = (pNumFiles >> 16) & 0b11111111;
 		data.push_back(numFilesBytes[0]);
 		data.push_back(numFilesBytes[1]);
 		data.push_back(numFilesBytes[2]);
 
-		numDirectoriesBytes[0] = numDirectories & 0b11111111;
-		numDirectoriesBytes[1] = (numDirectories >> 8) & 0b11111111;
-		numDirectoriesBytes[2] = (numDirectories >> 16) & 0b11111111;
+		numDirectoriesBytes[0] = pNumDirectories & 0b11111111;
+		numDirectoriesBytes[1] = (pNumDirectories >> 8) & 0b11111111;
+		numDirectoriesBytes[2] = (pNumDirectories >> 16) & 0b11111111;
 		data.push_back(numDirectoriesBytes[0]);
 		data.push_back(numDirectoriesBytes[1]);
 		data.push_back(numDirectoriesBytes[2]);
 
-		for (int i = 0; i < numFiles; i++)
+		for (int i = 0; i < pNumFiles; i++)
 		{
-			fileIdBytes[0] = fileIds[i] & 0b11111111;
-			fileIdBytes[1] = (fileIds[i] >> 8) & 0b11111111;
-			fileIdBytes[2] = (fileIds[i] >> 16) & 0b11111111;
+			fileIdBytes[0] = pFileIDs[i] & 0b11111111;
+			fileIdBytes[1] = (pFileIDs[i] >> 8) & 0b11111111;
+			fileIdBytes[2] = (pFileIDs[i] >> 16) & 0b11111111;
 			data.push_back(fileIdBytes[0]);
 			data.push_back(fileIdBytes[1]);
 			data.push_back(fileIdBytes[2]);
 		}
 
-		for (int i = 0; i < numDirectories; i++)
+		for (int i = 0; i < pNumDirectories; i++)
 		{
-			directoryIdBytes[0] = directoryIds[i] & 0b11111111;
-			directoryIdBytes[1] = (directoryIds[i] >> 8) & 0b11111111;
+			directoryIdBytes[0] = pDirectoryIDs[i] & 0b11111111;
+			directoryIdBytes[1] = (pDirectoryIDs[i] >> 8) & 0b11111111;
 			data.push_back(directoryIdBytes[0]);
 			data.push_back(directoryIdBytes[1]);
 		}
 
-		creationTimeBytes[0] = creationTime & 0b11111111;
-		creationTimeBytes[1] = (creationTime >> 8) & 0b11111111;
-		creationTimeBytes[2] = (creationTime >> 16) & 0b11111111;
-		creationTimeBytes[3] = (creationTime >> 24) & 0b11111111;
+		creationTimeBytes[0] = pCreationTime & 0b11111111;
+		creationTimeBytes[1] = (pCreationTime >> 8) & 0b11111111;
+		creationTimeBytes[2] = (pCreationTime >> 16) & 0b11111111;
+		creationTimeBytes[3] = (pCreationTime >> 24) & 0b11111111;
 		data.push_back(creationTimeBytes[0]);
 		data.push_back(creationTimeBytes[1]);
 		data.push_back(creationTimeBytes[2]);
 		data.push_back(creationTimeBytes[3]);
 		break;
-
 	case 3:
-		sizeBytes[0] = size & 0b11111111;
-		sizeBytes[1] = (size >> 8) & 0b11111111;
-		sizeBytes[2] = (size >> 16) & 0b11111111;
-		sizeBytes[3] = (size >> 24) & 0b11111111;
-		sizeBytes[4] = (size >> 32) & 0b11111111;
+		sizeBytes[0] = pSize & 0b11111111;
+		sizeBytes[1] = (pSize >> 8) & 0b11111111;
+		sizeBytes[2] = (pSize >> 16) & 0b11111111;
+		sizeBytes[3] = (pSize >> 24) & 0b11111111;
+		sizeBytes[4] = (pSize >> 32) & 0b11111111;
 		data.push_back(sizeBytes[0]);
 		data.push_back(sizeBytes[1]);
 		data.push_back(sizeBytes[2]);
-		data.push_back(sizeBytes[3]);
+		data.push_back(sizeBytes[3];
 		data.push_back(sizeBytes[4]);
 
-		nameLengthBytes[0] = nameLength & 0b11111111;
-		nameLengthBytes[1] = (nameLength >> 8) & 0b11111111;
+		data.push_back(flag);
+
+		idBytes[0] = pID & 0b11111111;
+		idBytes[1] = (pID >> 8) & 0b11111111;
+		idBytes[2] = (pID >> 16) & 0b11111111;
+		data.push_back(idBytes[0]);
+		data.push_back(idBytes[1]);
+		data.push_back(idBytes[2]);
+
+		nameLengthBytes[0] = pNameLength & 0b11111111;
+		nameLengthBytes[1] = (pNameLength >> 8) & 0b11111111;
 		data.push_back(nameLengthBytes[0]);
 		data.push_back(nameLengthBytes[1]);
-
-		for (int i = 0; i < nameLength; i++)
+		
+		for (int i = 0; i < pNameLength; i++)
 		{
-			data.push_back(name[i]);
+			data.push_back(pName[i]);
 		}
 
-		numFilesBytes[0] = numFiles & 0b11111111;
-		numFilesBytes[1] = (numFiles >> 8) & 0b11111111;
-		numFilesBytes[2] = (numFiles >> 16) & 0b11111111;
-		numFilesBytes[3] = (numFiles >> 24) & 0b11111111;
+		numFilesBytes[0] = pNumFiles & 0b11111111;
+		numFilesBytes[1] = (pNumFiles >> 8) & 0b11111111;
+		numFilesBytes[2] = (pNumFiles >> 16) & 0b11111111;
+		numFilesBytes[3] = (pNumFiles >> 24) & 0b11111111;
 		data.push_back(numFilesBytes[0]);
 		data.push_back(numFilesBytes[1]);
 		data.push_back(numFilesBytes[2]);
 		data.push_back(numFilesBytes[3]);
 
-		numDirectoriesBytes[0] = numDirectories & 0b11111111;
-		numDirectoriesBytes[1] = (numDirectories >> 8) & 0b11111111;
-		numDirectoriesBytes[2] = (numDirectories >> 16) & 0b11111111;
-		numDirectoriesBytes[3] = (numDirectories >> 24) & 0b11111111;
+		numDirectoriesBytes[0] = pNumDirectories & 0b11111111;
+		numDirectoriesBytes[1] = (pNumDirectories >> 8) & 0b11111111;
+		numDirectoriesBytes[2] = (pNumDirectories >> 16) & 0b11111111;
+		numDirectoriesBytes[3] = (pNumDirectories >> 24) & 0b11111111;
 		data.push_back(numDirectoriesBytes[0]);
 		data.push_back(numDirectoriesBytes[1]);
 		data.push_back(numDirectoriesBytes[2]);
 		data.push_back(numDirectoriesBytes[3]);
 
-		for (int i = 0; i < numFiles; i++)
+		for (int i = 0; i < pNumFiles; i++)
 		{
-			fileIdBytes[0] = fileIds[i] & 0b11111111;
-			fileIdBytes[1] = (fileIds[i] >> 8) & 0b11111111;
-			fileIdBytes[2] = (fileIds[i] >> 16) & 0b11111111;
-			fileIdBytes[3] = (fileIds[i] >> 24) & 0b11111111;
+			fileIdBytes[0] = pFileIDs[i] & 0b11111111;
+			fileIdBytes[1] = (pFileIDs[i] >> 8) & 0b11111111;
+			fileIdBytes[2] = (pFileIDs[i] >> 16) & 0b11111111;
+			fileIdBytes[3] = (pFileIDs[i] >> 24) & 0b11111111;
 			data.push_back(fileIdBytes[0]);
 			data.push_back(fileIdBytes[1]);
 			data.push_back(fileIdBytes[2]);
 			data.push_back(fileIdBytes[3]);
 		}
 
-		for (int i = 0; i < numDirectories; i++)
+		for (int i = 0; i < pNumDirectories; i++)
 		{
-			directoryIdBytes[0] = directoryIds[i] & 0b11111111;
-			directoryIdBytes[1] = (directoryIds[i] >> 8) & 0b11111111;
-			directoryIdBytes[2] = (directoryIds[i] >> 16) & 0b11111111;
+			directoryIdBytes[0] = pDirectoryIDs[i] & 0b11111111;
+			directoryIdBytes[1] = (pDirectoryIDs[i] >> 8) & 0b11111111;
+			directoryIdBytes[2] = (pDirectoryIDs[i] >> 16) & 0b11111111;
 			data.push_back(directoryIdBytes[0]);
 			data.push_back(directoryIdBytes[1]);
 			data.push_back(directoryIdBytes[2]);
 		}
 
-		creationTimeBytes[0] = creationTime & 0b11111111;
-		creationTimeBytes[1] = (creationTime >> 8) & 0b11111111;
-		creationTimeBytes[2] = (creationTime >> 16) & 0b11111111;
-		creationTimeBytes[3] = (creationTime >> 24) & 0b11111111;
-		creationTimeBytes[4] = (creationTime >> 32) & 0b11111111;
-		creationTimeBytes[5] = (creationTime >> 40) & 0b11111111;
-		creationTimeBytes[6] = (creationTime >> 48) & 0b11111111;
-		creationTimeBytes[7] = (creationTime >> 56) & 0b11111111;
+		creationTimeBytes[0] = pCreationTime & 0b11111111;
+		creationTimeBytes[1] = (pCreationTime >> 8) & 0b11111111;
+		creationTimeBytes[2] = (pCreationTime >> 16) & 0b11111111;
+		creationTimeBytes[3] = (pCreationTime >> 24) & 0b11111111;
+		creationTimeBytes[4] = (pCreationTime >> 32) & 0b11111111;
+		creationTimeBytes[5] = (pCreationTime >> 40) & 0b11111111;
+		creationTimeBytes[6] = (pCreationTime >> 48) & 0b11111111;
+		creationTimeBytes[7] = (pCreationTime >> 56) & 0b11111111;
 		data.push_back(creationTimeBytes[0]);
 		data.push_back(creationTimeBytes[1]);
 		data.push_back(creationTimeBytes[2]);
@@ -448,34 +596,43 @@ void DirectoryHeader::save(std::string path, uint64_t offsetEnc, uint8_t encrypt
 		data.push_back(creationTimeBytes[7]);
 		break;
 	}
-
-	std::ifstream fileRead(path, std::ios::binary);
-	fileRead.seekg(offsetEnc);
-	char encryptionByte = 0;
-	fileRead.read(&encryptionByte, 1);
-	fileRead.close();
 	
-	char mask = encryption << encryptionBit;
-	encryptionByte |= mask;
+	if (pSize != data.size())
+	{
+		std::cerr << "Error: directory header size mismatch" << std::endl;
+		std::cerr << "Directory ID: " << pID << std::endl;
+		std::cerr << "Expected size: " << pSize << std::endl;
+		std::cerr << "Actual size: " << data.size() << std::endl;
+		return;
+	}
+	
+	std::ofstream file(path, std::ios::binary);
+	//file.seekp(pOffset);
+	//file.write(data.data(), data.size());
+	//file.close();
 
-	std::ofstream fileWrite(path, std::ios::binary);
-	fileWrite.seekp(offsetEnc);
-	fileWrite.write(&encryptionByte, 1);
-	fileWrite.seekp(offsetHead);
-	fileWrite.write(data.data(), data.size());
-	fileWrite.close();
-
-	saved = true;
+	pSaved = true;
 }
 
 void DirectoryHeader::remove()
 {
+
 }
 
 //---------------------
 
-void FileHeader::create()
+FileHeader::FileHeader()
 {
+	pEncryption = false;
+	pSize = 0;
+	pID = 0;
+	pNameLength = 0;
+	pName = "";
+	pFileSize = 0;
+	pCreationTime = 0;
+	pOffset = 0;
+	pSaved = false;
+	pHeaderOffset = 0;
 }
 
 void FileHeader::save(std::string path, uint64_t offset)
