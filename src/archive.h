@@ -1,3 +1,6 @@
+#include <vector>
+#include <cstdint>
+
 // TEA Format:
 //
 // signature: 3 bytes
@@ -37,7 +40,7 @@
 // epoch modification time: 8 bytes
 // reserved: 1 byte
 //
-// Flags (archive header):
+// Flags (archive header - global flags):
 //
 // b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16
 //
@@ -68,34 +71,56 @@
 // file headers: n bytes
 // positions of file headers: n * 8 bytes
 
+#define TEA_SIGNATURE "TEA"
+#define TEA_VERSION 0b00000001 // 1
+#define TEA_PADDING 0b00000000
+
 enum FlagsIndices
 {
-	ENCRYPTED_BIT = 0,
-	COMPRESSED_BIT = 1,
-	COMPRESSION_TYPE_BIT = 2,
-	COMPRESSION_STRENGTH_BIT = 4,
-	DIRECTORY = 6
+	TEA_ENCRYPTED_BIT = 0,
+	TEA_COMPRESSED_BIT = 1,
+	TEA_COMPRESSION_TYPE_BIT = 2,
+	TEA_COMPRESSION_STRENGTH_BIT = 4,
+	TEA_DIRECTORY = 6
 };
 
 enum FlagsSizes
 {
-	ENCRYPTED_SIZE = 1,
-	COMPRESSED_SIZE = 1,
-	COMPRESSION_TYPE_SIZE = 2,
-	COMPRESSION_STRENGTH_SIZE = 2,
-	DIRECTORY_SIZE = 1
+	TEA_ENCRYPTED_SIZE = 1,
+	TEA_COMPRESSED_SIZE = 1,
+	TEA_COMPRESSION_TYPE_SIZE = 2,
+	TEA_COMPRESSION_STRENGTH_SIZE = 2,
+	TEA_DIRECTORY_SIZE = 1
+};
+
+enum EncryptionTypes
+{
+	TEA_BRUSUS = 0,
+	TEA_AES = 1,
+};
+
+enum CompressionTypes
+{
+	TEA_DEFLATE = 0,
+};
+
+enum Strengths
+{
+	TEA_LOW = 0,
+	TEA_MEDIUM = 1,
+	TEA_HIGH = 2,
 };
 
 struct ArchiveHeader
 {
-	uint64_t numFiles;
-	uint64_t posDataHeaders;
-	uint16_t numUniqueFlags;
-	uint64_t posCommonFlags;
-	uint16_t sizeMetadata;
-	uint64_t posMetadata;
-	uint16_t globalFlags;
-	uint32_t reserved;
+	uint64_t mNumFiles;
+	uint64_t mPosDataHeaders;
+	uint16_t mNumUniqueFlags;
+	uint64_t mPosCommonFlags;
+	uint16_t mSizeMetadata;
+	uint64_t mPosMetadata;
+	uint16_t mGlobalFlags;
+	uint32_t mReserved;
 
 	void load(std::string path);
 	std::vector<uint8_t> toBytes();
@@ -103,13 +128,13 @@ struct ArchiveHeader
 
 struct FileHeader
 {
-	uint16_t sizeName;
-	std::string name;
-	uint64_t sizeData;
-	uint64_t posParent;
-	uint64_t offsetData;
-	uint64_t epochModTime;
-	uint8_t reserved;
+	uint16_t mSizeName;
+	std::string mName;
+	uint64_t mSizeData;
+	uint64_t mPosParent;
+	uint64_t mOffsetData;
+	uint64_t mEpochModTime;
+	uint8_t mReserved;
 
 	void load(std::string path);
 	std::vector<uint8_t> toBytes();
@@ -117,33 +142,36 @@ struct FileHeader
 
 struct DataHeader
 {
-	uint64_t posEndFileHeaders;
-	std::vector<FileHeader> fileHeaders;
-	std::vector<uint64_t> posFileHeaders;
+	uint64_t mPosEndFileHeaders;
+	std::vector<FileHeader> mFileHeaders;
+	std::vector<uint64_t> mPosFileHeaders;
 
 	void load(std::string path);
 	std::vector<uint8_t> toBytes();
 };
 
 // TEA - Totality Encrypted Archive
-class TEA 
+class TEA
 {
 private:
-	std::string name;
-	std::string path;
-	std::string signature;
-	uint8_t version;
-	ArchiveHeader archiveHeader;
-	DataHeader dataHeader;
-	std::vector<uint8_t> data;
-	std::vector<uint8_t> commonFlags;
-	std::string metadata;
+	std::string mName;
+	std::string mPath;
+	std::string mSignature;
+	uint8_t mVersion;
+	ArchiveHeader mArchiveHeader;
+	DataHeader mDataHeader;
+	std::vector<uint8_t> mData;
+	std::vector<uint8_t> mCommonFlags;
+	std::string mMetadata;
 public:
 	TEA(std::string path, std::string name);
 
-	void load();
-	void save();
-	
+	void init();
+
+	void load(); // load archive and split it into temporary files for easier serialization
+	void save(); // save temporary files into archive
+
+	void extract(std::string path);
 	void extract(std::string archiveInternalPath, std::string path);
 	void add(std::string path, std::string archiveInternalPath);
 	void remove(std::string archiveInternalPath);
@@ -161,10 +189,12 @@ public:
 	void info(); // print number of files, size, etc.
 
 	void setArchiveFlags(bool encrypted, bool compressed, int method, int strength, std::vector<bool> additionalFlags);
+	void setArchiveFlags(std::vector<bool> flags);
 	bool getArchiveFlag(int bitIndex, int size);
 	std::vector<bool> getArchiveFlags();
 
 	void setCommonFlags(bool encrypted, bool compressed, int method, int strength, bool directory, std::vector<bool> additionalFlags);
+	void setCommonFlags(std::vector<bool> flags);
 	bool getCommonFlag(int bitIndex, int size);
 	std::vector<bool> getCommonFlags();
 
@@ -182,4 +212,4 @@ public:
 
 	void setVersion(uint8_t version);
 	uint8_t getVersion();
-}
+};
