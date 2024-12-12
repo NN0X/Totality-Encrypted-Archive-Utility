@@ -94,32 +94,32 @@ void TEA::load()
 	archive.read(reinterpret_cast<char*>(&headerData[0]), sizeof(ArchiveHeader));
 
 	// serialize archive header
-	mArchiveHeader.numFiles = *reinterpret_cast<uint64_t*>(&headerData[0]);
-	mArchiveHeader.posDataHeaders = *reinterpret_cast<uint64_t*>(&headerData[8]);
-	mArchiveHeader.numUniqueFlags = *reinterpret_cast<uint16_t*>(&headerData[16]);
-	mArchiveHeader.posCommonFlags = *reinterpret_cast<uint64_t*>(&headerData[18]);
-	mArchiveHeader.sizeMetadata = *reinterpret_cast<uint16_t*>(&headerData[26]);
-	mArchiveHeader.posMetadata = *reinterpret_cast<uint64_t*>(&headerData[28]);
-	mArchiveHeader.globalFlags = *reinterpret_cast<uint16_t*>(&headerData[36]);
-	mArchiveHeader.reserved = *reinterpret_cast<uint32_t*>(&headerData[38]);
+	mArchiveHeader.mNumFiles = *reinterpret_cast<uint64_t*>(&headerData[0]);
+	mArchiveHeader.mPosDataHeaders = *reinterpret_cast<uint64_t*>(&headerData[8]);
+	mArchiveHeader.mNumUniqueFlags = *reinterpret_cast<uint16_t*>(&headerData[16]);
+	mArchiveHeader.mPosCommonFlags = *reinterpret_cast<uint64_t*>(&headerData[18]);
+	mArchiveHeader.mSizeMetadata = *reinterpret_cast<uint16_t*>(&headerData[26]);
+	mArchiveHeader.mPosMetadata = *reinterpret_cast<uint64_t*>(&headerData[28]);
+	mArchiveHeader.mGlobalFlags = *reinterpret_cast<uint16_t*>(&headerData[36]);
+	mArchiveHeader.mReserved = *reinterpret_cast<uint32_t*>(&headerData[38]);
 
 	// move to metadata
-	archive.seekg(mArchiveHeader.posMetadata, std::ios::beg);
-	mMetadata.resize(mArchiveHeader.sizeMetadata);
-	archive.read(&mMetadata[0], mArchiveHeader.sizeMetadata);
+	archive.seekg(mArchiveHeader.mPosMetadata, std::ios::beg);
+	mMetadata.resize(mArchiveHeader.mSizeMetadata);
+	archive.read(&mMetadata[0], mArchiveHeader.mSizeMetadata);
 	
 	// move to common flags
-	archive.seekg(mArchiveHeader.posCommonFlags, std::ios::beg);
-	mCommonFlagsCached.resize(mArchiveHeader.numFiles);
-	size_t commonFlagsSize = mArchiveHeader.numFiles * mArchiveHeader.numUniqueFlags / 8;
+	archive.seekg(mArchiveHeader.mPosCommonFlags, std::ios::beg);
+	mCommonFlagsCached.resize(mArchiveHeader.mNumFiles);
+	size_t commonFlagsSize = mArchiveHeader.mNumFiles * mArchiveHeader.mNumUniqueFlags / 8;
 	archive.read(reinterpret_cast<char*>(&mCommonFlagsCached[0]), commonFlagsSize);
 
 	// load end of data headers
-	archive.seekg(mArchiveHeader.posDataHeaders, std::ios::beg);
-	archive.read(reinterpret_cast<char*>(&mDataHeader.posEndFileHeaders), sizeof(uint64_t));
+	archive.seekg(mArchiveHeader.mPosDataHeaders, std::ios::beg);
+	archive.read(reinterpret_cast<char*>(&mDataHeader.mPosEndFileHeaders), sizeof(uint64_t));
 
 	// cache 1024 file headers and corresponding positions from the start of the data headers
-	archive.seekg(mArchiveHeader.posDataHeaders + sizeof(uint64_t), std::ios::beg);
+	archive.seekg(mArchiveHeader.mPosDataHeaders + sizeof(uint64_t), std::ios::beg);
 	archive.read(reinterpret_cast<char*>(&mDataHeader.mFileHeadersCached[0]), 1024 * sizeof(FileHeader));
 	archive.read(reinterpret_cast<char*>(&mDataHeader.mPosFileHeaders[0]), 1024 * sizeof(uint64_t));
 
@@ -133,7 +133,7 @@ void TEA::load()
 	if (dataTemp.is_open())
 	{
 		archive.seekg(6, std::ios::beg);
-		size_t endData = mArchiveHeader.posDataHeaders - 1;
+		size_t endData = mArchiveHeader.mPosDataHeaders - 1;
 		size_t dataSize = endData - archive.tellg();
 		// copy data in chunks of 1024 bytes to data.teatemp while deleting it from the archive
 		for (size_t i = 0; i < dataSize; i += 1024)
@@ -164,8 +164,8 @@ void TEA::load()
 	std::ofstream dataHeadersTemp("data_headers.teatemp", std::ios::binary);
 	if (dataHeadersTemp.is_open())
 	{
-		archive.seekg(mArchiveHeader.posDataHeaders, std::ios::beg);
-		size_t dataSize = mArchiveHeader.posEndFileHeaders - mArchiveHeader.posDataHeaders;
+		archive.seekg(mArchiveHeader.mPosDataHeaders, std::ios::beg);
+		size_t dataSize = mDataHeader.mPosEndFileHeaders - mArchiveHeader.mPosDataHeaders;
 		// copy data headers in chunks of 1024 bytes to data_headers.teatemp while deleting it from the archive
 		for (size_t i = 0; i < dataSize; i += 1024)
 		{
@@ -195,8 +195,8 @@ void TEA::load()
 	std::ofstream commonFlagsTemp("common_flags.teatemp", std::ios::binary);
 	if (commonFlagsTemp.is_open())
 	{
-		archive.seekg(mArchiveHeader.posCommonFlags, std::ios::beg);
-		size_t dataSize = mArchiveHeader.numFiles * mArchiveHeader.numUniqueFlags / 8;
+		archive.seekg(mArchiveHeader.mPosCommonFlags, std::ios::beg);
+		size_t dataSize = mArchiveHeader.mNumFiles * mArchiveHeader.mNumUniqueFlags / 8;
 		// copy common flags in chunks of 1024 bytes to common_flags.teatemp while deleting it from the archive
 		for (size_t i = 0; i < dataSize; i += 1024)
 		{
