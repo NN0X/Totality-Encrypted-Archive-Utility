@@ -121,9 +121,6 @@ struct ArchiveHeader
 	uint64_t mPosMetadata;
 	uint16_t mGlobalFlags;
 	uint32_t mReserved;
-
-	void load(std::string path);
-	std::vector<uint8_t> toBytes();
 };
 
 struct FileHeader
@@ -135,19 +132,13 @@ struct FileHeader
 	uint64_t mOffsetData;
 	uint64_t mEpochModTime;
 	uint8_t mReserved;
-
-	void load(std::string path);
-	std::vector<uint8_t> toBytes();
 };
 
 struct DataHeader
 {
 	uint64_t mPosEndFileHeaders;
-	std::vector<FileHeader> mFileHeaders;
+	std::vector<FileHeader> mFileHeadersCached;
 	std::vector<uint64_t> mPosFileHeaders;
-
-	void load(std::string path);
-	std::vector<uint8_t> toBytes();
 };
 
 // TEA - Totality Encrypted Archive
@@ -160,16 +151,16 @@ private:
 	uint8_t mVersion;
 	ArchiveHeader mArchiveHeader;
 	DataHeader mDataHeader;
-	std::vector<uint8_t> mData;
-	std::vector<uint8_t> mCommonFlags;
+	std::vector<uint8_t> mDataCached;
+	std::vector<uint8_t> mCommonFlagsCached;
 	std::string mMetadata;
 public:
 	TEA(std::string path, std::string name);
 
 	void init();
 
-	void load(); // load archive and split it into temporary files for easier serialization
-	void save(); // save temporary files into archive
+	void load();
+	void save();
 
 	void extract(std::string path);
 	void extract(std::string archiveInternalPath, std::string path);
