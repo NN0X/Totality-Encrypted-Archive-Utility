@@ -141,6 +141,8 @@ struct DataHeader
 	std::vector<uint64_t> mPosFileHeaders;
 };
 
+bool deleteFileChunk(std::fstream& file, size_t pos, size_t size, const std::string &path);
+
 // TEA - Totality Encrypted Archive
 class TEA
 {
@@ -155,50 +157,50 @@ private:
 	std::vector<uint8_t> mCommonFlagsCached;
 	std::string mMetadata;
 public:
-	TEA(std::string path, std::string name);
+	TEA(const std::string &path, const std::string &name);
 
 	void init();
 
-	void load();
-	void save();
+	bool load();
+	bool save();
 
-	void extract(std::string path);
-	void extract(std::string archiveInternalPath, std::string path);
-	void add(std::string path, std::string archiveInternalPath);
-	void remove(std::string archiveInternalPath);
+	bool extract(const std::string &path);
+	bool extract(const std::string &archiveInternalPath, const std::string &path);
+	bool add(const std::string &path, const std::string &archiveInternalPath);
+	bool remove(const std::string &archiveInternalPath);
 
-	void move(std::string archiveInternalPathOld, std::string archiveInternalPathNew);
-	void rename(std::string archiveInternalPathOld, std::string archiveInternalPathNew);
+	bool move(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
+	bool rename(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
 
-	void encrypt(int method, std::string key);
-	void decrypt(int method, std::string key);
+	bool encrypt(int method, const std::string &key);
+	bool decrypt(int method, const std::string &key);
 	
-	void compress(int method, int strength);
-	void decompress(int method, int strength);
+	bool compress(int method, int strength);
+	bool decompress(int method, int strength);
 
-	void list(); // print file tree
-	void info(); // print number of files, size, etc.
+	bool list(); // print file tree
+	bool info(); // print number of files, size, etc.
 
-	void setArchiveFlags(bool encrypted, bool compressed, int method, int strength, std::vector<bool> additionalFlags);
-	void setArchiveFlags(std::vector<bool> flags);
-	bool getArchiveFlag(int bitIndex, int size);
-	std::vector<bool> getArchiveFlags();
+	bool setArchiveFlags(bool encrypted, bool compressed, int method, int strength, const std::vector<bool> &additionalFlags);
+	bool setArchiveFlags(const std::vector<bool> &flags);
+	bool getArchiveFlag(int bitIndex, int size, bool &flag);
+	bool getArchiveFlags(std::vector<bool> &flags);
 
-	void setCommonFlags(bool encrypted, bool compressed, int method, int strength, bool directory, std::vector<bool> additionalFlags);
-	void setCommonFlags(std::vector<bool> flags);
-	bool getCommonFlag(int bitIndex, int size);
-	std::vector<bool> getCommonFlags();
+	bool setCommonFlags(bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags);
+	bool setCommonFlags(const std::vector<bool> &flags);
+	bool getCommonFlag(int bitIndex, int size, bool &flag);
+	bool getCommonFlags(std::vector<bool> &flags);
 
-	void setName(std::string name);
+	void setName(const std::string &name);
 	std::string getName();
 
-	void setPath(std::string path);
+	void setPath(const std::string &path);
 	std::string getPath();
 
-	void setMetadata(std::string metadata);
+	void setMetadata(const std::string &metadata);
 	std::string getMetadata();
 
-	void setSignature(std::string signature);
+	void setSignature(const std::string &signature);
 	std::string getSignature();
 
 	void setVersion(uint8_t version);

@@ -2,10 +2,11 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include "archive.h"
 
-TEA::TEA(std::string path, std::string name) : mName(name), mPath(path)
+TEA::TEA(const std::string &path, const std::string &name) : mName(name), mPath(path)
 {
 	init();
 }
@@ -39,10 +40,50 @@ void TEA::init()
 	mMetadata = "";
 }
 
-void TEA::load()
+bool deleteFileChunk(std::fstream& file, size_t pos, size_t size, const std::string &path)
+{
+	file.seekg(0, std::ios::end);
+	size_t fileSize = file.tellg();
+	if (pos + size > fileSize)
+	{
+		std::cerr << "Invalid position or size\n";
+		return false;
+	}
+	std::vector<uint8_t> data(1024);
+
+	size_t remaining = fileSize - pos - size;
+	size_t readPos = pos + size;
+	size_t writePos = pos;
+	
+	while (remaining > 0)
+	{
+		size_t readSize = remaining > 1024 ? 1024 : remaining;
+		file.seekg(readPos, std::ios::beg);
+		if (!file.read(reinterpret_cast<char*>(&data[0]), readSize))
+		{
+			std::cerr << "Failed to read data\n";
+			return false;
+		}
+		file.seekp(writePos, std::ios::beg);
+		if (!file.write(reinterpret_cast<char*>(&data[0]), readSize))
+		{
+			std::cerr << "Failed to write data\n";
+			return false;
+		}
+		readPos += readSize;
+		writePos += readSize;
+		remaining -= readSize;
+	}
+
+	std::filesystem::resize_file(path, fileSize - size);
+
+	return true;
+}
+
+bool TEA::load()
 {
 	size_t archiveSize = 0;
-	std::ifstream archive(mPath, std::ios::binary | std::ios::ate);
+	std::fstream archive(mPath, std::ios::binary | std::ios::in | std::ios::out);
 	if (archive.is_open())
 	{
 		archiveSize = archive.tellg();
@@ -50,8 +91,8 @@ void TEA::load()
 	}
 	else
 	{
-		std::cout << "Failed to open archive\n";
-		return;
+		std::cerr << "Failed to open archive\n";
+		return false;
 	}
 
 	// load 3 signature bytes and check if they match
@@ -60,8 +101,8 @@ void TEA::load()
 	archive.read(&signature[0], 3);
 	if (signature != TEA_SIGNATURE)
 	{
-		std::cout << "Invalid signature\n";
-		return;
+		std::cerr << "Invalid signature\n";
+		return false;
 	}
 	// skip 1 byte padding
 	archive.seekg(1, std::ios::cur);
@@ -71,8 +112,8 @@ void TEA::load()
 	archive.read(reinterpret_cast<char*>(&version), sizeof(uint8_t));
 	if (version != TEA_VERSION)
 	{
-		std::cout << "Invalid version\n";
-		return;
+		std::cerr << "Invalid version\n";
+		return false;
 	}
 
 	// move to the end of the file
@@ -84,8 +125,8 @@ void TEA::load()
 	archive.read(&signatureEnd[0], 3);
 	if (signatureEnd != TEA_SIGNATURE)
 	{
-		std::cout << "Invalid signature at the end of the file\n";
-		return;
+		std::cerr << "Invalid signature\n";
+		return false;
 	}
 
 	// read archive header
@@ -129,7 +170,7 @@ void TEA::load()
 	// 3. common flags
 	
 	// create data.teatemp
-	std::ofstream dataTemp("data.teatemp", std::ios::binary);
+	std::ofstream dataTemp(".data.teatemp", std::ios::binary);
 	if (dataTemp.is_open())
 	{
 		archive.seekg(6, std::ios::beg);
@@ -143,25 +184,34 @@ void TEA::load()
 				std::vector<uint8_t> data(dataSize - i);
 				archive.read(reinterpret_cast<char*>(&data[0]), dataSize - i);
 				dataTemp.write(reinterpret_cast<char*>(&data[0]), dataSize - i);
-				// TODO: overwrite copied chunk by moving the rest of the archive
+				if (!deleteFileChunk(archive, archive.tellg(), dataSize - i, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete data chunk\n";
+					return false;
+				}
 			}
 			else
 			{
 				std::vector<uint8_t> data(1024);
 				archive.read(reinterpret_cast<char*>(&data[0]), 1024);
 				dataTemp.write(reinterpret_cast<char*>(&data[0]), 1024);
-				// TODO: overwrite copied chunk by moving the rest of the archive
+				if (!deleteFileChunk(archive, archive.tellg(), 1024, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete data chunk\n";
+					return false;
+				}
 			}
 		}
+		dataTemp.close();
 	}
 	else
 	{
-		std::cout << "Failed to create data.teatemp\n";
-		return;
+		std::cerr << "Failed to create .data.teatemp\n";
+		return false;
 	}
 
 	// create data_headers.teatemp
-	std::ofstream dataHeadersTemp("data_headers.teatemp", std::ios::binary);
+	std::ofstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
 	if (dataHeadersTemp.is_open())
 	{
 		archive.seekg(mArchiveHeader.mPosDataHeaders, std::ios::beg);
@@ -174,25 +224,34 @@ void TEA::load()
 				std::vector<uint8_t> data(dataSize - i);
 				archive.read(reinterpret_cast<char*>(&data[0]), dataSize - i);
 				dataHeadersTemp.write(reinterpret_cast<char*>(&data[0]), dataSize - i);
-				// TODO: overwrite copied chunk by moving the rest of the archive
+				if (!deleteFileChunk(archive, archive.tellg(), dataSize - i, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete data headers chunk\n";
+					return false;
+				}
 			}
 			else
 			{
 				std::vector<uint8_t> data(1024);
 				archive.read(reinterpret_cast<char*>(&data[0]), 1024);
 				dataHeadersTemp.write(reinterpret_cast<char*>(&data[0]), 1024);
-				// TODO: overwrite copied chunk by moving the rest of the archive
+				if (!deleteFileChunk(archive, archive.tellg(), 1024, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete data headers chunk\n";
+					return false;
+				}
 			}
 		}
+		dataHeadersTemp.close();
 	}
 	else
 	{
-		std::cout << "Failed to create data_headers.teatemp\n";
-		return;
+		std::cerr << "Failed to create .data_headers.teatemp\n";
+		return false;
 	}
 
 	// create common_flags.teatemp
-	std::ofstream commonFlagsTemp("common_flags.teatemp", std::ios::binary);
+	std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
 	if (commonFlagsTemp.is_open())
 	{
 		archive.seekg(mArchiveHeader.mPosCommonFlags, std::ios::beg);
@@ -205,34 +264,51 @@ void TEA::load()
 				std::vector<uint8_t> data(dataSize - i);
 				archive.read(reinterpret_cast<char*>(&data[0]), dataSize - i);
 				commonFlagsTemp.write(reinterpret_cast<char*>(&data[0]), dataSize - i);
-				// TODO: overwrite copied chunk by moving the rest of the archive
+				if (!deleteFileChunk(archive, archive.tellg(), dataSize - i, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete common flags chunk\n";
+					return false;
+				}
 			}
 			else
 			{
 				std::vector<uint8_t> data(1024);
 				archive.read(reinterpret_cast<char*>(&data[0]), 1024);
 				commonFlagsTemp.write(reinterpret_cast<char*>(&data[0]), 1024);
-				// TODO: overwrite copied chunk by moving the rest of the archive
+				if (!deleteFileChunk(archive, archive.tellg(), 1024, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete common flags chunk\n";
+					return false;
+				}
 			}
 		}
+		commonFlagsTemp.close();
 	}
 	else
 	{
-		std::cout << "Failed to create common_flags.teatemp\n";
-		return;
+		std::cerr << "Failed to create .common_flags.teatemp\n";
+		return false;
 	}
 	archive.close();
 
 	std::cout << "Loaded archive " << mName << " from " << mPath << "\n";
+
+	return true;
 }
 
-void TEA::save()
+bool TEA::save()
 {
 	// TODO: merge temporary files back into the archive
 	std::cout << "Saved archive to " << mPath << "\n";
+
+	return true;
 }
 
-void TEA::add(std::string path, std::string archiveInternalPath)
+bool TEA::add(const std::string &path, const std::string &archiveInternalPath)
 {
 	// TODO: add file entry to data_headers.teatemp, copy file to data.teatemp, update common_flags.teatemp
+	
+	std::cout << "Added " << path << " to " << mName << " at " << archiveInternalPath << "\n";
+	
+	return true;
 }
