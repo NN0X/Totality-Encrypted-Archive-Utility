@@ -13,6 +13,8 @@ TEA::TEA(const std::string &path, const std::string &name) : mName(name), mPath(
 
 void TEA::init()
 {
+	// TODO: create temporary files for data, data headers, common flags
+
 	mSignature = TEA_SIGNATURE;
 	mVersion = TEA_VERSION;
 
@@ -298,7 +300,82 @@ bool TEA::load()
 
 bool TEA::save()
 {
-	// TODO: merge temporary files back into the archive
+	// TODO: fix loading of temp files to be in-place
+
+	std::fstream archive(mPath, std::ios::binary | std::ios::in | std::ios::out);
+
+	// write signature
+	archive.write(TEA_SIGNATURE, 3);
+	archive.put(0);
+	// write version
+	archive.put(TEA_VERSION);
+	archive.put(0);
+
+	// load data.teatemp
+	std::ifstream dataTemp(".data.teatemp", std::ios::binary);
+	if (dataTemp.is_open())
+	{
+		dataTemp.seekg(0, std::ios::beg);
+		std::vector<uint8_t> data(1024);
+		while (dataTemp.read(reinterpret_cast<char*>(&data[0]), 1024))
+		{
+			archive.write(reinterpret_cast<char*>(&data[0]), 1024);
+		}
+		dataTemp.close();
+	}
+	archive.put(0);
+
+	// load data_headers.teatemp
+	std::ifstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
+	if (dataHeadersTemp.is_open())
+	{
+		dataHeadersTemp.seekg(0, std::ios::beg);
+		std::vector<uint8_t> data(1024);
+		while (dataHeadersTemp.read(reinterpret_cast<char*>(&data[0]), 1024))
+		{
+			archive.write(reinterpret_cast<char*>(&data[0]), 1024);
+		}
+		dataHeadersTemp.close();
+	}
+	archive.put(0);
+
+	// load common_flags.teatemp
+	std::ifstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
+	if (commonFlagsTemp.is_open())
+	{
+		commonFlagsTemp.seekg(0, std::ios::beg);
+		std::vector<uint8_t> data(1024);
+		while (commonFlagsTemp.read(reinterpret_cast<char*>(&data[0]), 1024))
+		{
+			archive.write(reinterpret_cast<char*>(&data[0]), 1024);
+		}
+		commonFlagsTemp.close();
+	}
+	archive.put(0);
+
+	// write metadata
+	archive.write(&mMetadata[0], mMetadata.size());
+	archive.put(0);
+
+	// write archive header
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mNumFiles), sizeof(uint64_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mPosDataHeaders), sizeof(uint64_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mNumUniqueFlags), sizeof(uint16_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mPosCommonFlags), sizeof(uint64_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mSizeMetadata), sizeof(uint16_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mPosMetadata), sizeof(uint64_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mGlobalFlags), sizeof(uint16_t));
+	archive.write(reinterpret_cast<char*>(&mArchiveHeader.mReserved), sizeof(uint32_t));
+	archive.put(0);
+
+	// write signature at the end of the file
+	archive.write(TEA_SIGNATURE, 3);
+
+	// delete temporary files
+	std::filesystem::remove(".data.teatemp");
+	std::filesystem::remove(".data_headers.teatemp");
+	std::filesystem::remove(".common_flags.teatemp");
+
 	std::cout << "Saved archive to " << mPath << "\n";
 
 	return true;
