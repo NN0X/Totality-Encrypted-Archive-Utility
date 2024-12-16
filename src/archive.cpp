@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <chrono>
 
 #include "archive.h"
 
@@ -15,6 +16,7 @@ TEA::~TEA()
 {
 	std::remove(".data.teatemp");
 	std::remove(".data_headers.teatemp");
+	std::remove(".data_headers_positions.teatemp");
 	std::remove(".common_flags.teatemp");
 }
 
@@ -50,6 +52,8 @@ void TEA::init()
 	dataTemp.close();
 	std::ofstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
 	dataHeadersTemp.close();
+	std::ofstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
+	dataHeadersPositionsTemp.close();
 	std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
 	commonFlagsTemp.close();
 }
@@ -265,6 +269,9 @@ bool TEA::load()
 		return false;
 	}
 
+	// TODO: create data_headers_positions.teatemp
+	
+
 	// create common_flags.teatemp
 	std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
 	if (commonFlagsTemp.is_open())
@@ -397,6 +404,8 @@ bool TEA::save()
 	}
 	archive.put(0);
 
+	// TODO: load data_headers_positions.teatemp
+
 	// load common_flags.teatemp
 	std::fstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary | std::ios::in | std::ios::out);
 	commonFlagsTemp.seekg(0, std::ios::end);
@@ -456,6 +465,7 @@ bool TEA::save()
 	// delete temporary files
 	std::filesystem::remove(".data.teatemp");
 	std::filesystem::remove(".data_headers.teatemp");
+	std::filesystem::remove(".data_headers_positions.teatemp")
 	std::filesystem::remove(".common_flags.teatemp");
 
 	std::cout << "Saved archive to " << mPath << "\n";
@@ -463,11 +473,204 @@ bool TEA::save()
 	return true;
 }
 
-bool TEA::add(const std::string &path, const std::string &archiveInternalPath)
+uint_64 getFileModEpochTime(const std::string &path)
 {
-	// TODO: add file entry to data_headers.teatemp, copy file to data.teatemp, update common_flags.teatemp
-	
-	std::cout << "Added " << path << " to " << mName << " at " << archiveInternalPath << "\n";
+	std::filesystem::file_time_type time = std::filesystem::last_write_time(path);
+	std::filesystem::file_time_type epochTime = std::filesystem::file_time_type::clock::from_time_t(0);
+	std::chrono::duration<double> duration = time - epochTime;
+	return duration.count();
+}
+
+uint64_t getCurrentEpochTime()
+{
+	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
+	std::chrono::duration<double> duration = now.time_since_epoch();
+	return duration.count();
+}
+
+struct DirSearch
+{
+	bool mRoot;
+	bool mFound;
+	bool mDirectory;
+	uint64_t mPos;
+};
+
+DirSearch findDirectory(const std::string &archiveInternalPath)
+{
+	if (archiveInternalPath.empty() || archiveInternalPath == ".")
+	{
+		DirSearch search;
+		search.mFound = true;
+		search.mRoot = true;
+		search.mPos = 0;
+
+		return search;
+	}
+
+	// split archiveInternalPath into parts
+	std::vector<std::string> pathParts;
+	std::string temp = archiveInternalPath;
+	while (!temp.empty())
+	{
+		size_t pos = temp.find('/');
+		if (pos == std::string::npos)
+		{
+			pathParts.push_back(temp);
+			break;
+		}
+		pathParts.push_back(temp.substr(0, pos));
+		temp = temp.substr(pos + 1);
+	}
+
+	DirSearch search;
+	search.mRoot = false;
+	search.mFound = false;
+	search.mPos = 0;
+
+	// go through data headers temp file and find the file with the given path
+	// check if the file is a directory
+	// if it is not a directory, mDirectory is false
+	std::fstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary | std::ios::in | std::ios::out);
+	std::fstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary | std::ios::in | std::ios::out)
+	if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
+	{
+		// TODO: search for the directory
+		
+		// load sequentially positions of file headers from data_headers_positions.teatemp
+		// check if last string in pathParts matches the name of the file
+		// if it does, check if the file is a directory
+		// do this until the last string in pathParts is found
+		// if it is not found, return search with mFound = false
+		// if it is found, return search with mFound = true and mDirectory = true
+		// if it is found and it is not a directory, return search with mFound = true and mDirectory = false
+	}
+	else
+	{
+		std::cerr << "Failed to open data headers temp file\n";
+	}
+
+	return search;
+}
+
+bool TEA::add(const std::string &path, const std::string &archiveInternalPath, bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags)
+{
+	// TODO: add file entry to data_headers.teatemp, data_headers_positions.teatemp, copy file to data.teatemp, update common_flags.teatemp
+
+	if (path.empty() && !directory)
+	{
+		std::cerr << "Path is empty\n";
+		return false;
+	}
+
+	// check if file exists
+	if (!std::filesystem::exists(path) && !path.empty())
+	{
+		std::cerr << "File does not exist\n";
+		return false;
+	}
+
+	size_t pos = 0;
+	size_t size = 0;
+	if (!directory)
+	{
+		// copy file to data.teatemp
+		std::fstream dataTemp(".data.teatemp", std::ios::binary | std::ios::in | std::ios::out);
+		std::ifstream file(path, std::ios::binary);
+		file.seekg(0, std::ios::end);
+		size = file.tellg();
+		file.seekg(0, std::ios::beg);
+		std::vector<uint8_t> data(size);
+		file.read(reinterpret_cast<char*>(&data[0]), size);
+		dataTemp.seekp(0, std::ios::end);
+		pos = dataTemp.tellp();
+		dataTemp.write(reinterpret_cast<char*>(&data[0]), size);
+		dataTemp.close();
+		file.close();
+	}
+
+	// create file header
+	FileHeader fileHeader;
+	fileHeader.mSizeName = archiveInternalPath.size();
+	fileHeader.mName = archiveInternalPath;
+	fileHeader.mSizeData = size;
+	fileHeader.mPosParent = 0;
+	fileHeader.mOffsetData = pos;
+	fileHeader.mEpochModTime = path.empty() ? getCurrentEpochTime() : getFileModEpochTime(path);
+	fileHeader.mReserved = 0;
+
+	std::vector<std::string> pathParts;
+	std::string temp = archiveInternalPath;
+	while (!temp.empty())
+	{
+		size_t pos = temp.find('/');
+		if (pos == std::string::npos)
+		{
+			pathParts.push_back(temp);
+			break;
+		}
+		pathParts.push_back(temp.substr(0, pos));
+		temp = temp.substr(pos + 1);
+	}
+	// example internal path: "dir1/dir2/file"
+	// dirInternalPath: "dir1/dir2"
+	std::string dirInternalPath = "";
+	for (size_t i = 0; i < pathParts.size() - 1; ++i)
+	{
+		dirInternalPath += pathParts[i] + "/";
+	}
+
+	DirSearch search = findDirectory(dirInternalPath);
+
+	if (!search.mFound)
+	{
+		// create directory entry
+		if (!TEA::add("", dirInternalPath, encrypted, compressed, method, strength, true, additionalFlags))
+		{
+			std::cerr << "Failed to create directory entry\n";
+			return false;
+		}
+		search = findDirectory(dirInternalPath);
+	}
+	if (search.mFound)
+	{
+		if (search.mDirectory)
+		{
+			fileHeader.mPosParent = search.mPos;
+
+			// add file entry to data_headers.teatemp
+
+			std::fstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary | std::ios::in | std::ios::out);
+			dataHeadersTemp.seekp(0, std::ios::end);
+			size_t pos = dataHeadersTemp.tellp();
+			dataHeadersTemp.write(reinterpret_cast<char*>(&fileHeader), sizeof(FileHeader));
+			dataHeadersTemp.close();
+
+			// add file position to data_headers_positions.teatemp
+			std::fstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary | std::ios::in | std::ios::out);
+			dataHeadersPositionsTemp.seekp(0, std::ios::end);
+			dataHeadersPositionsTemp.write(reinterpret_cast<char*>(&pos), sizeof(uint64_t));
+			dataHeadersPositionsTemp.close();
+
+			// TODO: update common_flags.teatemp
+		}
+		else
+		{
+			std::cerr << "Specified internal path is invalid\n";
+			return false;
+		}
+	}
+
+	// TODO: changes to archive header
+
+	if (directory)
+	{
+		std::cout << "Added " << archiveInternalPath << " to " << mName << " as a directory\n";
+	}
+	else
+	{
+		std::cout << "Added " << path << " to " << mName << " at " << archiveInternalPath << "\n";
+	}
 	
 	return true;
 }

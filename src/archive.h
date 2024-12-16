@@ -95,7 +95,7 @@ enum FlagsSizes
 
 enum EncryptionTypes
 {
-	TEA_BRUSUS = 0,
+	TEA_BRUTUS = 0,
 	TEA_AES = 1,
 };
 
@@ -165,9 +165,11 @@ public:
 	bool load();
 	bool save();
 
-	bool extract(const std::string &path);
+	bool extract(const std::string &archiveInternalpath);
 	bool extract(const std::string &archiveInternalPath, const std::string &path);
 	bool add(const std::string &path, const std::string &archiveInternalPath);
+	bool add(const std::string &path, const std::string &archiveInternalPath, bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags);
+	bool add(const std::string &path, const std::string &archiveInternalPath, const std::vector<bool> &flags);
 	bool remove(const std::string &archiveInternalPath);
 
 	bool move(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
