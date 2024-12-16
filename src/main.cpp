@@ -10,14 +10,15 @@
 int main()
 {
 	TEA archive(".", "archive");
-	if (archive.load())
+	if (archive.save())
 	{
-		std::cout << "Archive loaded" << std::endl;
+		std::cout << "Archive saved successfully!" << std::endl;
 	}
 	else
 	{
-		std::cout << "Archive not loaded" << std::endl;
+		std::cout << "Failed to save archive!" << std::endl;
 	}
+
 
 	return 0;
 }

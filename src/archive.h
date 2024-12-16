@@ -158,6 +158,7 @@ private:
 	std::string mMetadata;
 public:
 	TEA(const std::string &path, const std::string &name);
+	~TEA();
 
 	void init();
 
