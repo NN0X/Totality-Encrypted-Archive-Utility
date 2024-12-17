@@ -269,8 +269,46 @@ bool TEA::load()
 		return false;
 	}
 
-	// TODO: create data_headers_positions.teatemp
-	
+	// create data_headers_positions.teatemp
+	std::ofstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
+	if (dataHeadersPositionsTemp.is_open())
+	{
+		archive.seekg(mDataHeader.mPosEndFileHeaders, std::ios::beg);
+		size_t dataSize = mArchiveHeader.mNumFiles * sizeof(uint64_t);
+		// copy data headers in chunks of 1024 bytes to data_headers.teatemp while deleting it from the archive
+		for (size_t i = 0; i < dataSize; i += 1024)
+		{
+			if (dataSize - i < 1024)
+			{
+				std::vector<uint8_t> data(dataSize - i);
+				archive.read(reinterpret_cast<char*>(&data[0]), dataSize - i);
+				dataHeadersPositionsTemp.write(reinterpret_cast<char*>(&data[0]), dataSize - i);
+				if (!deleteFileChunk(archive, archive.tellg(), dataSize - i, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete data headers positions chunk\n";
+					return false;
+				}
+			}
+			else
+			{
+				std::vector<uint8_t> data(1024);
+				archive.read(reinterpret_cast<char*>(&data[0]), 1024);
+				dataHeadersPositionsTemp.write(reinterpret_cast<char*>(&data[0]), 1024);
+				if (!deleteFileChunk(archive, archive.tellg(), 1024, mPath + "/" + mName))
+				{
+					std::cerr << "Failed to delete data headers positions chunk\n";
+					return false;
+				}
+			}
+		}
+		dataHeadersPositionsTemp.close();
+	}
+	else
+	{
+		std::cerr << "Failed to create .data_headers_positions.teatemp\n";
+		return false;
+	}
+
 
 	// create common_flags.teatemp
 	std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
@@ -332,10 +370,10 @@ bool TEA::save()
 
 	// load data.teatemp
 	std::fstream dataTemp(".data.teatemp", std::ios::binary | std::ios::in | std::ios::out);
-	dataTemp.seekg(0, std::ios::end);
-	size_t size = dataTemp.tellg();
 	if (dataTemp.is_open())
 	{
+		dataTemp.seekg(0, std::ios::end);
+		size_t size = dataTemp.tellg();
 		dataTemp.seekg(0, std::ios::beg);
 		for (size_t i = 0; i < size; i+=1024)
 		{
@@ -369,10 +407,10 @@ bool TEA::save()
 
 	// load data_headers.teatemp
 	std::fstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary | std::ios::in | std::ios::out);
-	dataHeadersTemp.seekg(0, std::ios::end);
-	size = dataHeadersTemp.tellg();
 	if (dataHeadersTemp.is_open())
 	{
+		dataHeadersTemp.seekg(0, std::ios::end);
+		size_t size = dataHeadersTemp.tellg();
 		dataHeadersTemp.seekg(0, std::ios::beg);
 		for(size_t i = 0; i < size; i+=1024)
 		{
@@ -402,16 +440,49 @@ bool TEA::save()
 
 		dataHeadersTemp.close();
 	}
-	archive.put(0);
 
-	// TODO: load data_headers_positions.teatemp
+	//load data_headers_positions.teatemp
+	std::fstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary | std::ios::in | std::ios::out);
+	if (dataHeadersPositionsTemp.is_open())
+	{
+		dataHeadersPositionsTemp.seekg(0, std::ios::end);
+		size_t size = dataHeadersPositionsTemp.tellg();
+		dataHeadersPositionsTemp.seekg(0, std::ios::beg);
+		for(size_t i = 0; i < size; i+=1024)
+		{
+			if (size - i < 1024)
+			{
+				std::vector<uint8_t> data(size - i);
+				dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&data[0]), size - i);
+				archive.write(reinterpret_cast<char*>(&data[0]), size - i);
+				if (!deleteFileChunk(dataHeadersPositionsTemp, dataHeadersPositionsTemp.tellg(), size - i, ".data_headers_positions.teatemp"))
+				{
+					std::cerr << "Failed to delete data headers positions chunk\n";
+					return false;
+				}
+			}
+			else
+			{
+				std::vector<uint8_t> data(1024);
+				dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&data[0]), 1024);
+				archive.write(reinterpret_cast<char*>(&data[0]), 1024);
+				if (!deleteFileChunk(dataHeadersPositionsTemp, dataHeadersPositionsTemp.tellg(), 1024, ".data_headers_positions.teatemp"))
+				{
+					std::cerr << "Failed to delete data headers positions chunk\n";
+					return false;
+				}
+			}
+		}
+
+		dataHeadersPositionsTemp.close();
+	}
 
 	// load common_flags.teatemp
 	std::fstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary | std::ios::in | std::ios::out);
-	commonFlagsTemp.seekg(0, std::ios::end);
-	size = commonFlagsTemp.tellg();
 	if (commonFlagsTemp.is_open())
 	{
+		commonFlagsTemp.seekg(0, std::ios::end);
+		size_t size = commonFlagsTemp.tellg();
 		commonFlagsTemp.seekg(0, std::ios::beg);
 		for(size_t i = 0; i < size; i+=1024)
 		{
@@ -465,7 +536,7 @@ bool TEA::save()
 	// delete temporary files
 	std::filesystem::remove(".data.teatemp");
 	std::filesystem::remove(".data_headers.teatemp");
-	std::filesystem::remove(".data_headers_positions.teatemp")
+	std::filesystem::remove(".data_headers_positions.teatemp");
 	std::filesystem::remove(".common_flags.teatemp");
 
 	std::cout << "Saved archive to " << mPath << "\n";
@@ -473,12 +544,11 @@ bool TEA::save()
 	return true;
 }
 
-uint_64 getFileModEpochTime(const std::string &path)
+uint64_t getFileModEpochTime(const std::string &path)
 {
 	std::filesystem::file_time_type time = std::filesystem::last_write_time(path);
-	std::filesystem::file_time_type epochTime = std::filesystem::file_time_type::clock::from_time_t(0);
-	std::chrono::duration<double> duration = time - epochTime;
-	return duration.count();
+	uint64_t modTimeInEpoch = time.time_since_epoch().count();
+	return modTimeInEpoch;
 }
 
 uint64_t getCurrentEpochTime()
@@ -532,7 +602,7 @@ DirSearch findDirectory(const std::string &archiveInternalPath)
 	// check if the file is a directory
 	// if it is not a directory, mDirectory is false
 	std::fstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary | std::ios::in | std::ios::out);
-	std::fstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary | std::ios::in | std::ios::out)
+	std::fstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary | std::ios::in | std::ios::out);
 	if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
 	{
 		// TODO: search for the directory
