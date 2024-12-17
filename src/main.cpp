@@ -11,7 +11,7 @@ int main()
 {
 	TEA archive(".", "archive");
 
-	if (archive.add("file1.txt", "test/file1", false, false, 0, 0, false, {}))
+	if (archive.add("file1.txt", "file1", false, false, 0, 0, false, {}))
 	{
 		std::cout << "File added successfully!" << std::endl;
 	}

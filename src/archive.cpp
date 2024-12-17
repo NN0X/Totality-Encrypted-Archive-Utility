@@ -660,6 +660,8 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
 		file.close();
 	}
 
+	// TODO: somewhere below there is an error
+
 	// create file header
 	FileHeader fileHeader;
 	fileHeader.mSizeName = archiveInternalPath.size();
@@ -723,7 +725,46 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
 			dataHeadersPositionsTemp.write(reinterpret_cast<char*>(&pos), sizeof(uint64_t));
 			dataHeadersPositionsTemp.close();
 
-			// TODO: update common_flags.teatemp
+			// add flags to common_flags.teatemp
+			// TODO: check if common_flags.teatemp is correct
+			std::fstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary | std::ios::in | std::ios::out);
+			commonFlagsTemp.seekp(0, std::ios::end);
+			uint8_t flagsRequired = 0;
+			flagsRequired |= encrypted ? 0b00000001 : 0;
+			flagsRequired |= compressed ? 0b00000010 : 0;
+			flagsRequired |= strength & 0b00001100;
+			flagsRequired |= method & 0b00110000;
+			flagsRequired |= directory ? 0b01000000 : 0;
+			if (additionalFlags.size() + 7 > mArchiveHeader.mNumUniqueFlags)
+			{
+				std::cerr << "Too many additional flags\n";
+				return false;
+			}
+			if (additionalFlags.size() >= 1)
+			{
+				flagsRequired |= additionalFlags[0] ? 0b10000000 : 0;
+			}
+			commonFlagsTemp.write(reinterpret_cast<char*>(&flagsRequired), 1);
+			if (additionalFlags.size() + 7 > 8)
+			{
+				std::vector<uint8_t> flagsTemp;
+				flagsTemp.push_back(0);
+				size_t j = 0;
+				for (size_t i = 1; i < additionalFlags.size(); ++i)
+				{
+					if (i % 8 == 0)
+					{
+						flagsTemp.push_back(0);
+					}
+					flagsTemp[j] |= additionalFlags[i] ? 1 << (i % 8) : 0;
+					++j;
+				}
+				if (flagsTemp.size() > 1)
+				{
+					commonFlagsTemp.write(reinterpret_cast<char*>(&flagsTemp[0]), flagsTemp.size());
+				}
+			}
+			commonFlagsTemp.close();
 		}
 		else
 		{
@@ -733,6 +774,8 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
 	}
 
 	// TODO: changes to archive header
+
+	mArchiveHeader.mNumFiles++;
 
 	if (directory)
 	{
