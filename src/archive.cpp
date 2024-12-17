@@ -544,6 +544,7 @@ bool TEA::save()
 	return true;
 }
 
+// TODO: test if epoch time is correct
 uint64_t getFileModEpochTime(const std::string &path)
 {
 	std::filesystem::file_time_type time = std::filesystem::last_write_time(path);
