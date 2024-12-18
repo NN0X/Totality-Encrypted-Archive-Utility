@@ -31,6 +31,23 @@ int main()
 		std::cout << "Failed to save archive!" << std::endl;
 	}
 
+	// wait
+	std::cin.get();
+
+	TEA archive2(".", "archive");
+	if (archive2.load())
+	{
+		std::cout << "Archive loaded successfully!" << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed to load archive!" << std::endl;
+	}
+
+	archive2.info();
+
+	// wait
+	std::cin.get();
 
 	return 0;
 }

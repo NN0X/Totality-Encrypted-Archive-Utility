@@ -141,8 +141,6 @@ struct DataHeader
 	std::vector<uint64_t> mPosFileHeaders;
 };
 
-bool deleteFileChunk(std::fstream& file, size_t pos, size_t size, const std::string &path);
-
 // TEA - Totality Encrypted Archive
 class TEA
 {
