@@ -20,8 +20,9 @@ int main()
 		std::cout << "Failed to add file!" << std::endl;
 	}
 
-	// wait
-	std::cin.get();
+	archive.info();
+	archive.list();
+
 	if (archive.save())
 	{
 		std::cout << "Archive saved successfully!" << std::endl;
@@ -31,11 +32,7 @@ int main()
 		std::cout << "Failed to save archive!" << std::endl;
 	}
 
-	// wait
-	std::cin.get();
-
-	TEA archive2(".", "archive");
-	if (archive2.load())
+	if (archive.load())
 	{
 		std::cout << "Archive loaded successfully!" << std::endl;
 	}
@@ -44,10 +41,21 @@ int main()
 		std::cout << "Failed to load archive!" << std::endl;
 	}
 
-	archive2.info();
+	// BUG: file1.txt disappears from the archive somehow
 
-	// wait
-	std::cin.get();
+	archive.info();
+	archive.list();
+
+	archive.setName("archive2");
+
+	if (archive.save())
+	{
+		std::cout << "Archive saved successfully!" << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed to save archive!" << std::endl;
+	}
 
 	return 0;
 }

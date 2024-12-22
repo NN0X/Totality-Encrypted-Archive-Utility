@@ -4,6 +4,7 @@
 #include <vector>
 #include <filesystem>
 #include <chrono>
+#include <bitset>
 
 #include "archive.h"
 
@@ -360,9 +361,9 @@ bool TEA::save()
 	if (dataHeadersTemp.is_open())
 	{
 		dataHeadersTemp.seekg(0, std::ios::end);
-		size_t size = dataHeadersTemp.tellg();
+		uint64_t size = dataHeadersTemp.tellg();
 		archive.seekp(0, std::ios::end);
-		size_t posDataHeaders = archive.tellp();
+		uint64_t posDataHeaders = archive.tellp();
 		mArchiveHeader.mPosDataHeaders = posDataHeaders;
 		mDataHeader.mPosEndFileHeaders = size + 8;
 		dataHeadersTemp.seekg(0, std::ios::beg);
@@ -411,7 +412,7 @@ bool TEA::save()
 	archive.put(0);
 
 	archive.seekp(0, std::ios::end);
-	size_t posMetadata = archive.tellp();
+	uint64_t posMetadata = archive.tellp();
 	mArchiveHeader.mPosMetadata = posMetadata;
 
 	// write metadata
@@ -689,19 +690,53 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
 	return true;
 }
 
+// TODO: implement file structure into list
+bool TEA::list()
+{
+	std::ifstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
+	std::ifstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
+
+	if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
+	{
+		uint64_t pos;
+		uint16_t nameSize;
+		std::string name;
+		for (size_t _ = 0; _ < mArchiveHeader.mNumFiles; _++)
+		{
+			dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&pos), sizeof(uint64_t));
+			dataHeadersTemp.seekg(pos, std::ios::beg);
+			dataHeadersTemp.read(reinterpret_cast<char*>(&nameSize), sizeof(uint16_t));
+			name.resize(nameSize);
+			dataHeadersTemp.read(&name[0], nameSize);
+			std::cout << name << "\n";
+		}
+		return true;
+	}
+	else
+	{
+		std::cerr << "Failed to open data headers temp files\n";
+		return false;
+	}
+}
+
 // print number of files, size, etc.
 bool TEA::info()
 {
 	std::cout << "Archive: " << mName << "\n";
 	std::cout << "Number of files: " << mArchiveHeader.mNumFiles << "\n";
-	std::cout << "Size: " << mArchiveHeader.mPosDataHeaders << " bytes\n";
 	std::cout << "Metadata: " << mMetadata << "\n";
-	std::cout << "Global flags: " << mArchiveHeader.mGlobalFlags << "\n";
+	// cout flags in binary format
+	std::cout << "Global flags: " << std::bitset<16>(mArchiveHeader.mGlobalFlags) << "\n";
 	std::cout << "Reserved: " << mArchiveHeader.mReserved << "\n";
 
 	return true;
 }
 
+
+void TEA::setName(const std::string &name)
+{
+	mName = name;
+}
 
 // TODO: check if setMetadata works
 void TEA::setMetadata(const std::string &metadata)

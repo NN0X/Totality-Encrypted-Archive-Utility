@@ -158,6 +158,8 @@ public:
 	TEA(const std::string &path, const std::string &name);
 	~TEA();
 
+	void close();
+
 	void init();
 
 	bool load();
