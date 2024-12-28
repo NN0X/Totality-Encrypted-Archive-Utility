@@ -23,6 +23,8 @@ int main()
 	archive.info();
 	archive.list();
 
+	archive.setMetadata("metadata");
+
 	if (archive.save())
 	{
 		std::cout << "Archive saved successfully!" << std::endl;
@@ -41,12 +43,17 @@ int main()
 		std::cout << "Failed to load archive!" << std::endl;
 	}
 
-	// BUG: file1.txt disappears from the archive somehow
+	if (archive.add("file1.txt", "file2", false, false, 0, 0, false, {}))
+	{
+		std::cout << "File added successfully!" << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed to add file!" << std::endl;
+	}
 
 	archive.info();
 	archive.list();
-
-	archive.setName("archive2");
 
 	if (archive.save())
 	{

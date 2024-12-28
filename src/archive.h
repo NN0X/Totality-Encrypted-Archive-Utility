@@ -67,13 +67,15 @@
 //
 // Data header:
 //
-// end of file headers: 8 bytes
+// end of file headers: 8 bytes (from the start of file headers)
 // file headers: n bytes
 // positions of file headers: n * 8 bytes
 
 #define TEA_SIGNATURE "TEA"
 #define TEA_VERSION 0b00000001 // 1
 #define TEA_PADDING 0b00000000
+
+#define DEFAULT_CHUNK_SIZE 1024
 
 enum FlagsIndices
 {
@@ -183,6 +185,10 @@ public:
 
 	bool list(); // print file tree
 	bool info(); // print number of files, size, etc.
+
+	bool printDataHEX();
+	bool printDataHeadersHEX();
+	bool printCommonFlagsHEX();
 
 	bool setArchiveFlags(bool encrypted, bool compressed, int method, int strength, const std::vector<bool> &additionalFlags);
 	bool setArchiveFlags(const std::vector<bool> &flags);
