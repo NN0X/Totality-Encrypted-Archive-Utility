@@ -1,159 +1,217 @@
-#ifndef ARCHIVE_H
-#define ARCHIVE_H
-
+#include <vector>
 #include <cstdint>
-#include <string>
-#include <unordered_map>
 
-#include "tables.h"
-#include "headers.h"
+// TEA Format:
+//
+// signature: 3 bytes
+// padding: 1 byte
+// version: 1 byte
+// padding: 1 byte
+// data: n bytes
+// padding: 1 byte
+// data headers: n bytes
+// padding: 1 byte
+// common flags: n bytes
+// padding: 1 byte
+// metadata: n bytes
+// padding: 1 byte
+// header: 42 bytes
+// padding: 1 byte
+// signature: 3 bytes
+//
+// header:
+//
+// number of files: 8 bytes
+// position of data headers: 8 bytes
+// number of unique flags: 2 bytes
+// position of common flags: 8 bytes
+// size of metadata: 2 bytes
+// position of metadata: 8 bytes
+// global flags: 2 bytes
+// reserved: 4 bytes
+//
+// file header:
+//
+// size of name: 2 bytes
+// name: n bytes
+// size of data: 8 bytes
+// position of parent: 8 bytes (0 if no parent)
+// offset from data: 8 bytes
+// epoch modification time: 8 bytes
+// reserved: 1 byte
+//
+// Flags (archive header - global flags):
+//
+// b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16
+//
+// b1: encrypted
+// b2: compressed
+// b3: compression type
+// b4: compression type
+// b5: compression strength
+// b6: compression strength
+// >= b7: reserved
+//
+// Flags (common flags):
+//
+// b1, b2, b3, b4, b5, b6, b7, b8, ...
+//
+// b1: encrypted
+// b2: compressed
+// b3: compression type
+// b4: compression type
+// b5: compression strength
+// b6: compression strength
+// b7: directory
+// >= b8: reserved
+//
+// Data header:
+//
+// end of file headers: 8 bytes (from the start of file headers)
+// file headers: n bytes
+// positions of file headers: n * 8 bytes
 
-struct FileData
+#define TEA_SIGNATURE "TEA"
+#define TEA_VERSION 0b00000001 // 1
+#define TEA_PADDING 0b00000000
+
+#define DEFAULT_CHUNK_SIZE 1024
+
+enum FlagsIndices
 {
-	uint64_t size;
-	uint64_t offset;
-
-	uint8_t* data;
+	TEA_ENCRYPTED_BIT = 0,
+	TEA_COMPRESSED_BIT = 1,
+	TEA_COMPRESSION_TYPE_BIT = 2,
+	TEA_COMPRESSION_STRENGTH_BIT = 4,
+	TEA_DIRECTORY = 6
 };
 
-class Archive
+enum FlagsSizes
 {
+	TEA_ENCRYPTED_SIZE = 1,
+	TEA_COMPRESSED_SIZE = 1,
+	TEA_COMPRESSION_TYPE_SIZE = 2,
+	TEA_COMPRESSION_STRENGTH_SIZE = 2,
+	TEA_DIRECTORY_SIZE = 1
+};
+
+enum EncryptionTypes
+{
+	TEA_BRUTUS = 0,
+	TEA_AES = 1,
+};
+
+enum CompressionTypes
+{
+	TEA_DEFLATE = 0,
+};
+
+enum Strengths
+{
+	TEA_LOW = 0,
+	TEA_MEDIUM = 1,
+	TEA_HIGH = 2,
+};
+
+struct ArchiveHeader
+{
+	uint64_t mNumFiles;
+	uint64_t mPosDataHeaders;
+	uint16_t mNumUniqueFlags;
+	uint64_t mPosCommonFlags;
+	uint16_t mSizeMetadata;
+	uint64_t mPosMetadata;
+	uint16_t mGlobalFlags;
+	uint32_t mReserved;
+};
+
+struct FileHeader
+{
+	uint16_t mSizeName;
+	std::string mName;
+	uint64_t mSizeData;
+	uint64_t mPosParent;
+	uint64_t mOffsetData;
+	uint64_t mEpochModTime;
+	uint8_t mReserved;
+};
+
+struct DataHeader
+{
+	uint64_t mPosEndFileHeaders;
+	std::vector<FileHeader> mFileHeadersCached;
+	std::vector<uint64_t> mPosFileHeaders;
+};
+
+// TEA - Totality Encrypted Archive
+class TEA
+{
+private:
+	std::string mName;
+	std::string mPath;
+	std::string mSignature;
+	uint8_t mVersion;
+	ArchiveHeader mArchiveHeader;
+	DataHeader mDataHeader;
+	std::vector<uint8_t> mDataCached;
+	std::vector<uint8_t> mCommonFlagsCached;
+	std::string mMetadata;
 public:
-	Archive(std::string name, std::string path);
-	~Archive();
+	TEA(const std::string &path, const std::string &name);
+	~TEA();
+
+	void close();
+
+	void init();
+
+	bool load();
+	bool save();
+
+	bool extract(const std::string &archiveInternalpath);
+	bool extract(const std::string &archiveInternalPath, const std::string &path);
+	bool add(const std::string &path, const std::string &archiveInternalPath);
+	bool add(const std::string &path, const std::string &archiveInternalPath, bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags);
+	bool add(const std::string &path, const std::string &archiveInternalPath, const std::vector<bool> &flags);
+	bool remove(const std::string &archiveInternalPath);
+
+	bool move(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
+	bool rename(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
+
+	bool encrypt(int method, const std::string &key);
+	bool decrypt(int method, const std::string &key);
 	
-	void printCurrentFile();
-	void printCurrentDirectory();
+	bool compress(int method, int strength);
+	bool decompress(int method, int strength);
 
-	void printFilesTree();
-	void printDirectoriesTree();
+	bool list(); // print file tree
+	bool info(); // print number of files, size, etc.
 
-	void addFile(std::string filePath);
-	void eraseFile(std::string fileName); // zero out the data and remove the file from the file table
+	bool printDataHEX();
+	bool printDataHeadersHEX();
+	bool printCommonFlagsHEX();
 
-	void addDirectory(std::string directoryPath);
-	void eraseDirectory(std::string directoryName); // remove the directory from the directory table and erase all files in it
+	bool setArchiveFlags(bool encrypted, bool compressed, int method, int strength, const std::vector<bool> &additionalFlags);
+	bool setArchiveFlags(const std::vector<bool> &flags);
+	bool getArchiveFlag(int bitIndex, int size, bool &flag);
+	bool getArchiveFlags(std::vector<bool> &flags);
 
-	void rebuild(); // remove all zeroed out bytes and reorganize the archive(sort ids, etc.)
+	bool setCommonFlags(bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags);
+	bool setCommonFlags(const std::vector<bool> &flags);
+	bool getCommonFlag(int bitIndex, int size, bool &flag);
+	bool getCommonFlags(std::vector<bool> &flags);
 
-	void setFile(std::string fileName);
-	void setDirectory(std::string directoryName);
-
-	void extractFile(std::string filePath);
-	void extractDirectory(std::string directoryPath);
-
-	void extractAll(std::string path);
-	
-	void compressHUFFMAN();
-	void compressDEFLATE();
-
-	void decompress();
-	
-	void encryptAES();
-	void encryptBRUTUS();
-
-	void encryptDirectoryAES();
-	void encryptDirectoryBRUTUS();
-
-	void decrypt();
-	void decryptDirectory();
-
-	uint16_t getRamLimit();
-	uint16_t calculateRamUsage();
-	uint64_t getStorageLimit();
-	uint64_t calculateStorageUsage();
-
+	void setName(const std::string &name);
 	std::string getName();
+
+	void setPath(const std::string &path);
 	std::string getPath();
 
-private:
-	std::string pName;
-	std::string pPath;
-	std::string pFullPath;
+	void setMetadata(const std::string &metadata);
+	std::string getMetadata();
 
-	uint32_t pCurrentDirectoryID; // 0 is top level directory
-	uint32_t pCurrentFileID; // 0 is NULL
+	void setSignature(const std::string &signature);
+	std::string getSignature();
 
-	uint16_t pRamLimit; // in MiB
-	uint16_t pStorageLimit; // in MiB
-
-	ArchiveHeader pArchiveHeader;
-	DirectoryTable pDirectoryTable;
-	FileTable pFileTable;
-
-	uint64_t pFileLastID;
-	uint64_t pDirectoryLastID;
+	void setVersion(uint8_t version);
+	uint8_t getVersion();
 };
-
-#endif // ARCHIVE_H
-
-
-// Archive Format
-
-// archive is in little endian
-//
-// ---------------------
-// HEADER
-// 1 bytes - header size in bytes (including this field)
-//
-// 1 bytes - flags (compression, encryption, 2 bits for storage mode, 2 bits for compression level, 2 bits reserved)
-//	storage mode (size of headers):
-//		0 - very low <- this is for extreme cases 
-//		1 - low 
-//		2 - medium 
-//		3 - high <- this is the default
-//	
-//	compression level:
-//		0 - very low
-//		1 - low
-//		2 - medium <- this is the default
-//		3 - high
-//
-// (0, 1, 2, 3) bytes - number of directories
-// (1, 2, 3, 4) bytes - number of files
-// (0, 0, 6, 8) bytes - total size of all files (without header, without file and directory tables) before compression in bytes
-// (0, 0, 4, 8) bytes - epoch time of creation of this archive
-// (0, 0, 4, 8) bytes - number of zeroed out bytes (including all tables and file data)
-//
-// if compression flag is set:
-// 	1 bytes - compression method
-// 
-// if encryption flag is set:
-// 	1 bytes - encryption method
-//
-// ---------------------
-// DIRECTORY TABLE
-// (0, 3, 6, 8) bytes - size of directory table in bytes (including this field)
-// 
-// for each directory: 
-// 	(0, 2, 4, 5) bytes - directory header size in bytes (including this field)
-// 	(0, 1, 1, 1) bytes - flags (1 bit for encryption, 7 bits reserved)
-// 	(0, 1, 2, 3) bytes - directory id (unique, in most basic case, it is the index of the directory in the directory table)
-// 	(0, 1, 2, 2) bytes - directory name length in bytes
-// 	(0, n, n, n) bytes - directory name
-// 	(0, 1, 3, 4) bytes - number of files in this directory
-// 	(0, 1, 3, 4) bytes - number of directories in this directory
-// 	(0, 2n,3n,4n) bytes - ids of files in this directory
-// 	(0, 1n,2n,3n) bytes - ids of directories in this directory
-// 	(0, 0, 4, 8) bytes - epoch time of creation of this directory
-//
-// ---------------------
-// FILE TABLE
-// (3, 4, 6, 8) bytes - size of file table in bytes (including this field)
-//
-// for each file: 
-// 	(2, 2, 3, 4) bytes - file header size in bytes (including this field)
-// 	(1, 1, 1, 1) bytes - flags (1 bit for encryption, 7 bits reserved)
-// 	(1, 2, 3, 4) bytes - file id (unique, in most basic case, it is the index of the file in the file table)
-// 	(1, 1, 2, 2) bytes - file name length in bytes
-// 	(n, n, n, n) bytes - file name
-// 	(4, 5, 6, 8) bytes - file size in bytes
-// 	(0, 0, 4, 8) bytes - epoch time of creation of this file
-// 	(5, 7, 8, 8) bytes - offset to the beginning of the file data (from the end of the file table)
-//
-// ---------------------
-// FILE DATA
-//
-// for each file and each part of a split file:
-// 	n bytes - file data
-
