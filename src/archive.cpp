@@ -59,11 +59,11 @@ void TEA::init()
         commonFlagsTemp.close();
 }
 
-bool deleteFileChunk(std::fstream& file, size_t pos, size_t size, const std::string &path)
+bool deleteFileChunk(std::fstream& file, uint64_t pos, uint64_t size, const std::string &path)
 {
         file.seekg(0, std::ios::end);
-        size_t fileSize = file.tellg();
-        size_t readPos = pos + size;
+        uint64_t fileSize = file.tellg();
+        uint64_t readPos = pos + size;
         if (readPos > fileSize)
         {
                 std::cerr << "Invalid position or size\n";
@@ -71,12 +71,12 @@ bool deleteFileChunk(std::fstream& file, size_t pos, size_t size, const std::str
         }
         std::vector<uint8_t> data(DEFAULT_CHUNK_SIZE);
 
-        size_t remaining = fileSize - pos - size;
-        size_t writePos = pos;
+        uint64_t remaining = fileSize - pos - size;
+        uint64_t writePos = pos;
 
         while (remaining > 0)
         {
-                size_t readSize = remaining > DEFAULT_CHUNK_SIZE ? DEFAULT_CHUNK_SIZE : remaining;
+                uint64_t readSize = remaining > DEFAULT_CHUNK_SIZE ? DEFAULT_CHUNK_SIZE : remaining;
                 file.seekg(readPos, std::ios::beg);
                 if (!file.read(reinterpret_cast<char*>(&data[0]), readSize))
                 {
@@ -101,10 +101,10 @@ bool deleteFileChunk(std::fstream& file, size_t pos, size_t size, const std::str
         return true;
 }
 
-bool moveFileDataInPlace(std::fstream &fileOrig, std::ofstream &fileTarget, const std::string &pathOrig, size_t dataSize, size_t chunkSize)
+bool moveFileDataInPlace(std::fstream &fileOrig, std::ofstream &fileTarget, const std::string &pathOrig, uint64_t dataSize, uint64_t chunkSize)
 {
-        size_t pos;
-        for (size_t i = 0; i < dataSize; i += chunkSize)
+        uint64_t pos;
+        for (uint64_t i = 0; i < dataSize; i += chunkSize)
         {
                 if (dataSize - i < chunkSize)
                 {
@@ -140,7 +140,7 @@ bool moveFileDataInPlace(std::fstream &fileOrig, std::ofstream &fileTarget, cons
 
 bool TEA::load()
 {
-        size_t archiveSize = 0;
+        uint64_t archiveSize = 0;
         std::string fullPath = mPath + "/" + mName + ".tea";
         std::fstream archive(fullPath, std::ios::binary | std::ios::in | std::ios::out);
         if (archive.is_open())
@@ -219,13 +219,13 @@ bool TEA::load()
         // 3. common flags
 
         // create data.teatemp
-        size_t offset = 0;
+        uint64_t offset = 0;
         std::ofstream dataTemp(".data.teatemp", std::ios::binary);
         if (dataTemp.is_open())
         {
                 archive.seekg(6, std::ios::beg);
-                size_t endData = mArchiveHeader.mPosDataHeaders - 1;
-                size_t dataSize = endData - 6;
+                uint64_t endData = mArchiveHeader.mPosDataHeaders - 1;
+                uint64_t dataSize = endData - 6;
                 offset = dataSize;
                 if (!moveFileDataInPlace(archive, dataTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
@@ -249,7 +249,7 @@ bool TEA::load()
                 // load end of file headers
                 archive.seekg(mArchiveHeader.mPosDataHeaders - offset, std::ios::beg);
                 archive.read(reinterpret_cast<char*>(&mDataHeader.mPosEndFileHeaders), sizeof(uint64_t));
-                size_t dataSize = mDataHeader.mPosEndFileHeaders;
+                uint64_t dataSize = mDataHeader.mPosEndFileHeaders;
                 offset += dataSize;
                 if (!moveFileDataInPlace(archive, dataHeadersTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
@@ -271,7 +271,7 @@ bool TEA::load()
         if (dataHeadersPositionsTemp.is_open())
         {
                 archive.seekg(8, std::ios::beg);
-                size_t dataSize = mArchiveHeader.mNumFiles * sizeof(uint64_t);
+                uint64_t dataSize = mArchiveHeader.mNumFiles * sizeof(uint64_t);
                 offset += dataSize;
                 if (!moveFileDataInPlace(archive, dataHeadersPositionsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
@@ -294,7 +294,7 @@ bool TEA::load()
         {
                 archive.seekg(mArchiveHeader.mPosCommonFlags - offset, std::ios::beg);
                 float commonFlagsSizeFloating = (mArchiveHeader.mNumFiles * mArchiveHeader.mNumUniqueFlags) / 8.0;
-                size_t dataSize = static_cast<size_t>(commonFlagsSizeFloating + 0.5);
+                uint64_t dataSize = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
                 offset += dataSize;
                 if (!moveFileDataInPlace(archive, commonFlagsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
@@ -342,7 +342,7 @@ bool TEA::save()
         if (dataTemp.is_open())
         {
                 dataTemp.seekg(0, std::ios::end);
-                size_t size = dataTemp.tellg();
+                uint64_t size = dataTemp.tellg();
                 archive.seekp(0, std::ios::end);
                 dataTemp.seekg(0, std::ios::beg);
                 if (!moveFileDataInPlace(dataTemp, archive, ".data.teatemp", size, DEFAULT_CHUNK_SIZE))
@@ -395,7 +395,7 @@ bool TEA::save()
         if (dataHeadersPositionsTemp.is_open())
         {
                 dataHeadersPositionsTemp.seekg(0, std::ios::end);
-                size_t size = dataHeadersPositionsTemp.tellg();
+                uint64_t size = dataHeadersPositionsTemp.tellg();
                 archive.seekp(0, std::ios::end);
                 dataHeadersPositionsTemp.seekg(0, std::ios::beg);
                 if (!moveFileDataInPlace(dataHeadersPositionsTemp, archive, ".data_headers_positions.teatemp", size, DEFAULT_CHUNK_SIZE))
@@ -421,7 +421,7 @@ bool TEA::save()
         if (commonFlagsTemp.is_open())
         {
                 commonFlagsTemp.seekg(0, std::ios::end);
-                size_t size = commonFlagsTemp.tellg();
+                uint64_t size = commonFlagsTemp.tellg();
                 archive.seekp(0, std::ios::end);
                 mArchiveHeader.mPosCommonFlags = archive.tellp();
                 commonFlagsTemp.seekg(0, std::ios::beg);
@@ -501,7 +501,7 @@ struct FileSearch
         uint64_t mPos; // pos of the file header
 };
 
-FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlags, size_t numFiles, bool skipPath)
+FileSearch findFile(const std::string &archiveInternalPath, uint64_t numUniqueFlags, uint64_t numFiles, bool skipPath)
 {
         std::ifstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
         std::ifstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
@@ -518,7 +518,7 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
         // parts: test1, test2, test3
         std::vector<std::string> parts;
         std::string part;
-        for (size_t i = 0; i < archiveInternalPath.size(); i++)
+        for (uint64_t i = 0; i < archiveInternalPath.size(); i++)
         {
                 if (archiveInternalPath[i] == '/')
                 {
@@ -531,23 +531,19 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
                 }
         }
         parts.push_back(part);
-        size_t posParent = 0; // no parent
+        uint64_t posParent = ROOT; // no parent
         // search for directories
-        size_t indexTemp;
+        uint64_t indexTemp;
         if (skipPath)
         {
-                indexTemp = parts.size() - 2;
+                indexTemp = parts.size() < 2 ? 0 : parts.size() - 2;
         }
         else
         {
                 indexTemp = 0;
         }
-        if (indexTemp < 0)
-        {
-                indexTemp = 0;
-        }
 
-        for (size_t i = indexTemp; i < parts.size() - 1; i++)
+        for (uint64_t i = indexTemp; i < parts.size() - 1; i++)
         {
                 // check if file exists
                 bool found = false;
@@ -556,7 +552,7 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
                 uint64_t posParentTemp; // no parent
                 uint16_t sizeName;
                 std::string name;
-                for (size_t j = 0; j < numFiles; j++)
+                for (uint64_t j = 0; j < numFiles; j++)
                 {
                         dataHeadersPositionsTemp.seekg(j * sizeof(uint64_t), std::ios::beg);
                         dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&pos), sizeof(uint64_t));
@@ -570,7 +566,7 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
                         {
                                 // check if directory
                                 float commonFlagsSizeFloating = (numUniqueFlags) / 8.0;
-                                size_t bytesFlags = static_cast<size_t>(commonFlagsSizeFloating + 0.5);
+                                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
                                 std::vector<uint8_t> flags(bytesFlags);
                                 commonFlagsTemp.seekg(j * bytesFlags, std::ios::beg);
                                 commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
@@ -582,7 +578,7 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
                                         break;
                                 }
                                 found = true;
-                                posParent = pos + TEA_POSITION_PARENT_OFFSET;
+                                posParent = pos;
                                 break;
                         }
                         else if (name == parts[i] && posParentTemp != posParent)
@@ -602,16 +598,17 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
         fileSearch.mFound = false;
         fileSearch.mDirectory = false;
         fileSearch.mPos = 0;
-        size_t posParentTemp = 0; // no parent
+        uint64_t posParentTemp; // no parent
         std::string name;
-        size_t sizeName;
+        uint64_t sizeName;
 
-        for (size_t j = 0; j < numFiles; j++)
+        for (uint64_t j = 0; j < numFiles; j++)
         {
+                std::cin.get();
                 dataHeadersPositionsTemp.seekg(j * sizeof(uint64_t), std::ios::beg);
                 dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&fileSearch.mPos), sizeof(uint64_t));
                 dataHeadersTemp.seekg(fileSearch.mPos, std::ios::beg);
-                dataHeadersTemp.read(reinterpret_cast<char*>(&sizeName), sizeof(uint16_t));
+                dataHeadersTemp.read(reinterpret_cast<char*>(&sizeName), sizeof(uint16_t)); // BUG: this value is wrong
                 name.resize(sizeName);
                 dataHeadersTemp.read(&name[0], sizeName);
                 dataHeadersTemp.seekg(sizeof(uint64_t), std::ios::cur); // skip size of data
@@ -620,7 +617,7 @@ FileSearch findFile(const std::string &archiveInternalPath, size_t numUniqueFlag
                 {
                         // check if directory
                         float commonFlagsSizeFloating = (numUniqueFlags) / 8.0;
-                        size_t bytesFlags = static_cast<size_t>(commonFlagsSizeFloating + 0.5);
+                        uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
                         std::vector<uint8_t> flags(bytesFlags);
                         commonFlagsTemp.seekg(j * bytesFlags, std::ios::beg);
                         commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
@@ -649,7 +646,7 @@ bool addFileHeader(FileHeader &fileHeader, uint64_t *pos)
         {
                 dataHeadersTemp.seekp(0, std::ios::end);
                 dataHeadersPositionsTemp.seekp(0, std::ios::end);
-                size_t posTemp = dataHeadersTemp.tellp();
+                uint64_t posTemp = dataHeadersTemp.tellp();
                 dataHeadersPositionsTemp.write(reinterpret_cast<char*>(&posTemp), sizeof(uint64_t));
                 dataHeadersTemp.write(reinterpret_cast<char*>(&fileHeader.mSizeName), sizeof(uint16_t));
                 dataHeadersTemp.write(&fileHeader.mName[0], fileHeader.mSizeName);
@@ -676,7 +673,7 @@ bool addFileHeader(FileHeader &fileHeader, uint64_t *pos)
         return true;
 }
 
-bool addFlags(size_t numUnique , bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags)
+bool addFlags(uint64_t numUnique , bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags)
 {
         if (additionalFlags.size() != numUnique - 7)
         {
@@ -691,7 +688,7 @@ bool addFlags(size_t numUnique , bool encrypted, bool compressed, int method, in
         {
                 commonFlagsTemp.seekp(0, std::ios::end);
                 float commonFlagsSizeFloating = (numUnique) / 8.0;
-                size_t bytesFlags = static_cast<size_t>(commonFlagsSizeFloating + 0.5);
+                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
                 std::vector<uint8_t> flags(bytesFlags);
                 uint8_t defaultFlags = 0;
                 defaultFlags |= encrypted << 7;
@@ -705,8 +702,8 @@ bool addFlags(size_t numUnique , bool encrypted, bool compressed, int method, in
                         defaultFlags |= additionalFlags[0];
                 }
                 flags[0] = defaultFlags;
-                size_t i = 1;
-                for (size_t j = 1; j < additionalFlags.size(); j++)
+                uint64_t i = 1;
+                for (uint64_t j = 1; j < additionalFlags.size(); j++)
                 {
                         flags[i] |= additionalFlags[j] << (7 - j % 8);
                         if (j % 8 == 0)
@@ -742,7 +739,7 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
 
         std::vector<std::string> archiveInternalPathParts;
         std::string part;
-        for (size_t i = 0; i < archiveInternalPath.size(); i++)
+        for (uint64_t i = 0; i < archiveInternalPath.size(); i++)
         {
                 if (archiveInternalPath[i] == '/')
                 {
@@ -759,7 +756,7 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
         std::vector<std::string> allInternalPaths;
         allInternalPaths.reserve(archiveInternalPathParts.size());
         std::string internalPath;
-        for (size_t i = 0; i < archiveInternalPathParts.size(); i++)
+        for (uint64_t i = 0; i < archiveInternalPathParts.size(); i++)
         {
                 internalPath += archiveInternalPathParts[i];
                 allInternalPaths.push_back(internalPath);
@@ -771,8 +768,8 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
         // allInternalPaths[1] = test1/test2
         // allInternalPaths[2] = test1/test2/test3
         // take care of path without the file
-        size_t parentPos = 0; // no parent
-        for (size_t i = 0; i < allInternalPaths.size() - 1; i++)
+        uint64_t parentPos = ROOT; // no parent
+        for (uint64_t i = 0; i < allInternalPaths.size() - 1; i++)
         {
                 std::cout << "Checking: " << allInternalPaths[i] << "\n";
                 FileSearch dirSearch = findFile(allInternalPaths[i], mArchiveHeader.mNumUniqueFlags, mArchiveHeader.mNumFiles, false);
@@ -781,7 +778,7 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
                         FileHeader dirHeader;
                         std::vector<std::string> parts;
                         std::string part;
-                        for (size_t j = 0; j < allInternalPaths[i].size(); j++)
+                        for (uint64_t j = 0; j < allInternalPaths[i].size(); j++)
                         {
                                 if (allInternalPaths[i][j] == '/')
                                 {
@@ -819,7 +816,7 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
                         std::cerr << allInternalPaths[i] << " is not a directory\n";
                         return false;
                 }
-                parentPos = dirSearch.mPos + TEA_POSITION_PARENT_OFFSET;
+                parentPos = dirSearch.mPos;
         }
 
         // add file
@@ -854,10 +851,10 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
                 dataTemp.seekp(0, std::ios::end);
                 fileHeader.mOffsetData = dataTemp.tellp();
                 dataTemp.seekp(0, std::ios::beg);
-                for (size_t i = 0; i < fileHeader.mSizeData; i += DEFAULT_CHUNK_SIZE)
+                for (uint64_t i = 0; i < fileHeader.mSizeData; i += DEFAULT_CHUNK_SIZE)
                 {
                         std::vector<uint8_t> data(DEFAULT_CHUNK_SIZE);
-                        size_t readSize = fileHeader.mSizeData - i < DEFAULT_CHUNK_SIZE ? fileHeader.mSizeData - i : DEFAULT_CHUNK_SIZE;
+                        uint64_t readSize = fileHeader.mSizeData - i < DEFAULT_CHUNK_SIZE ? fileHeader.mSizeData - i : DEFAULT_CHUNK_SIZE;
                         file.read(reinterpret_cast<char*>(&data[0]), readSize);
                         dataTemp.write(reinterpret_cast<char*>(&data[0]), readSize);
                 }
@@ -911,10 +908,10 @@ bool TEA::list()
         {
                 uint64_t pos;
                 float commonFlagsSizeFloating = mArchiveHeader.mNumUniqueFlags / 8.0;
-                size_t bytesFlags = static_cast<size_t>(commonFlagsSizeFloating + 0.5);
+                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
                 std::vector<uint8_t> flags(bytesFlags);
                 FileHeader fileHeader;
-                for (size_t i = 0; i < mArchiveHeader.mNumFiles; i++)
+                for (uint64_t i = 0; i < mArchiveHeader.mNumFiles; i++)
                 {
                         dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&pos), sizeof(uint64_t));
                         dataHeadersTemp.seekg(pos, std::ios::beg);
@@ -930,7 +927,7 @@ bool TEA::list()
                         commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
                         std::cout << fileHeader.mName << "\n";
                         std::cout << "\tSize: " << fileHeader.mSizeData << "\n";
-                        if (fileHeader.mPosParent)
+                        if (fileHeader.mPosParent != ROOT)
                         {
                                 std::cout << "\tParent position: " << fileHeader.mPosParent << "\n";
                         }
@@ -941,7 +938,7 @@ bool TEA::list()
                         std::cout << "\tData offset: " << fileHeader.mOffsetData << "\n";
                         std::cout << "\tModification time: " << fileHeader.mEpochModTime << "\n";
                         std::cout << "\tFlags: ";
-                        for (size_t j = 0; j < bytesFlags; j++)
+                        for (uint64_t j = 0; j < bytesFlags; j++)
                         {
                                 std::cout << std::bitset<8>(flags[j]) << " ";
                         }
@@ -982,11 +979,11 @@ bool TEA::printDataHEX()
         {
                 std::cout << "Data: ";
                 dataTemp.seekg(0, std::ios::end);
-                size_t size = dataTemp.tellg();
+                uint64_t size = dataTemp.tellg();
                 dataTemp.seekg(0, std::ios::beg);
                 std::vector<uint8_t> data(size);
                 dataTemp.read(reinterpret_cast<char*>(&data[0]), size);
-                for (size_t i = 0; i < size; ++i)
+                for (uint64_t i = 0; i < size; ++i)
                 {
                         std::cout << std::hex << static_cast<int>(data[i]) << " ";
                 }
@@ -1011,11 +1008,11 @@ bool TEA::printDataHeadersHEX()
         {
                 std::cout << "Data headers: ";
                 dataHeadersTemp.seekg(0, std::ios::end);
-                size_t size = dataHeadersTemp.tellg();
+                uint64_t size = dataHeadersTemp.tellg();
                 dataHeadersTemp.seekg(0, std::ios::beg);
                 std::vector<uint8_t> data(size);
                 dataHeadersTemp.read(reinterpret_cast<char*>(&data[0]), size);
-                for (size_t i = 0; i < size; ++i)
+                for (uint64_t i = 0; i < size; ++i)
                 {
                         std::cout << std::hex << static_cast<int>(data[i]) << " ";
                 }
@@ -1033,11 +1030,11 @@ bool TEA::printDataHeadersHEX()
         {
                 std::cout << "Data headers positions: ";
                 dataHeadersPositionsTemp.seekg(0, std::ios::end);
-                size_t size = dataHeadersPositionsTemp.tellg();
+                uint64_t size = dataHeadersPositionsTemp.tellg();
                 dataHeadersPositionsTemp.seekg(0, std::ios::beg);
                 std::vector<uint8_t> data(size);
                 dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&data[0]), size);
-                for (size_t i = 0; i < size; ++i)
+                for (uint64_t i = 0; i < size; ++i)
                 {
                         std::cout << std::hex << static_cast<int>(data[i]) << " ";
                 }
@@ -1062,11 +1059,11 @@ bool TEA::printCommonFlagsHEX()
         {
                 std::cout << "Common flags: ";
                 commonFlagsTemp.seekg(0, std::ios::end);
-                size_t size = commonFlagsTemp.tellg();
+                uint64_t size = commonFlagsTemp.tellg();
                 commonFlagsTemp.seekg(0, std::ios::beg);
                 std::vector<uint8_t> data(size);
                 commonFlagsTemp.read(reinterpret_cast<char*>(&data[0]), size);
-                for (size_t i = 0; i < size; ++i)
+                for (uint64_t i = 0; i < size; ++i)
                 {
                         std::cout << std::hex << static_cast<int>(data[i]) << " ";
                 }

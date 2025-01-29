@@ -35,7 +35,7 @@
 // size of name: 2 bytes
 // name: n bytes
 // size of data: 8 bytes
-// position of parent: 8 bytes (0 if no parent)
+// position of parent: 8 bytes (0xFFFFFFFFFFFFFFFF for root)
 // offset from data: 8 bytes
 // epoch modification time: 8 bytes
 // reserved: 1 byte
@@ -74,7 +74,7 @@
 #define TEA_SIGNATURE "TEA"
 #define TEA_VERSION 0b00000001 // 1
 #define TEA_PADDING 0b00000000
-#define TEA_POSITION_PARENT_OFFSET 1  // to prevent 0 from being used as a parent
+#define ROOT 0xFFFFFFFFFFFFFFFF  // root id is the maximum value of uint64_t
 
 
 // temporary defines
