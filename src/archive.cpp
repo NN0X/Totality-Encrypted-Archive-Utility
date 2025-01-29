@@ -600,15 +600,14 @@ FileSearch findFile(const std::string &archiveInternalPath, uint64_t numUniqueFl
         fileSearch.mPos = 0;
         uint64_t posParentTemp; // no parent
         std::string name;
-        uint64_t sizeName;
+        uint16_t sizeName;
 
         for (uint64_t j = 0; j < numFiles; j++)
         {
-                std::cin.get();
                 dataHeadersPositionsTemp.seekg(j * sizeof(uint64_t), std::ios::beg);
                 dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&fileSearch.mPos), sizeof(uint64_t));
                 dataHeadersTemp.seekg(fileSearch.mPos, std::ios::beg);
-                dataHeadersTemp.read(reinterpret_cast<char*>(&sizeName), sizeof(uint16_t)); // BUG: this value is wrong
+                dataHeadersTemp.read(reinterpret_cast<char*>(&sizeName), sizeof(uint16_t));
                 name.resize(sizeName);
                 dataHeadersTemp.read(&name[0], sizeName);
                 dataHeadersTemp.seekg(sizeof(uint64_t), std::ios::cur); // skip size of data
