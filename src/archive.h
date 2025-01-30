@@ -73,12 +73,20 @@
 
 #define TEA_SIGNATURE "TEA"
 #define TEA_VERSION 0b00000001 // 1
-#define TEA_PADDING 0b00000000
+#define TEA_PADDING 0b00000000 // 0x00
 #define ROOT 0xFFFFFFFFFFFFFFFF  // root id is the maximum value of uint64_t
 
+#define TEA_SIGNATURE_SIZE 3
+#define TEA_PADDING_SIZE 1
+#define TEA_VERSION_SIZE 1
+#define TEA_HEADER_SIZE 42
 
-// temporary defines
+#define TEA_GLOBAL_FLAGS_SIZE_BITS 16
+#define TEA_RESERVED_SIZE_BITS 32
+
+// temporary defines that should be computed during runtime based on available system information
 #define DEFAULT_CHUNK_SIZE 1024
+#define DEFAULT_CACHE_SIZE 1024
 
 enum FlagsIndices
 {
@@ -86,7 +94,8 @@ enum FlagsIndices
 	TEA_COMPRESSED_BIT = 1,
 	TEA_COMPRESSION_TYPE_BIT = 2,
 	TEA_COMPRESSION_STRENGTH_BIT = 4,
-	TEA_DIRECTORY = 6
+	TEA_DIRECTORY_BIT = 6,
+        TEA_FLAGS_RESERVED_START_BIT = 7
 };
 
 enum FlagsSizes
@@ -102,11 +111,14 @@ enum EncryptionTypes
 {
 	TEA_BRUTUS = 0,
 	TEA_AES = 1,
+        TEA_ENCRYPTION_RESERVED = 2,
 };
 
 enum CompressionTypes
 {
 	TEA_DEFLATE = 0,
+        TEA_COMPRESSION_RESERVED_1 = 1,
+        TEA_COMPRESSION_RESERVED_2 = 2,
 };
 
 enum Strengths
@@ -146,7 +158,8 @@ struct DataHeader
 	std::vector<uint64_t> mPosFileHeaders;
 };
 
-// TEA - Totality Encrypted Archive
+// TEA - Totality Encrypted Archive (contains core functionality)
+// INFO: all functions that return return true on success and false on failure
 class TEA
 {
 private:
@@ -160,34 +173,39 @@ private:
 	std::vector<uint8_t> mCommonFlagsCached;
 	std::string mMetadata;
 public:
-	TEA(const std::string &path, const std::string &name);
+	TEA(const std::string &path, const std::string &name); // create archive class with specified path and name
 	~TEA();
 
-	void close();
+	void close(); // calls save() but also frees resources
 
-	void init();
+	void init(); // initialize archive class with default values and create temporary files
 
-	bool load();
-	bool save();
+	bool load(); // load archive from .tea file
+	bool save(); // save archive to .tea file (after this operation archive class is in closed state)
 
-	bool extract(const std::string &archiveInternalpath);
+        bool rebuild(); // rebuild archive from temporary files (for example after unexpected program termination)
+
+        // extract doesn't remove file from archive
+	bool extract(const std::string &archiveInternalpath); // extract file from archive to current directory
 	bool extract(const std::string &archiveInternalPath, const std::string &path);
 	bool add(const std::string &path, const std::string &archiveInternalPath);
 	bool add(const std::string &path, const std::string &archiveInternalPath, bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags);
 	bool add(const std::string &path, const std::string &archiveInternalPath, const std::vector<bool> &flags);
-	bool remove(const std::string &archiveInternalPath);
+	bool remove(const std::string &archiveInternalPath); // remove file from archive (doesn't extract)
 
 	bool move(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
-	bool rename(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew);
+	bool rename(const std::string &archiveInternalPath, const std::string &newName);
 
-	bool encrypt(int method, const std::string &key);
-	bool decrypt(int method, const std::string &key);
+	bool encrypt(int method, const std::vector<uint8_t> &key);
+	bool decrypt(int method, const std::vector<uint8_t> &key);
 	
 	bool compress(int method, int strength);
 	bool decompress(int method, int strength);
 
-	bool list(); // print file tree
-	bool info(); // print number of files, size, etc.
+	bool list(); // list all files in archive
+        bool tree(); // list all files in archive in tree structure
+	
+        bool info(); // print number of files, size, etc.
 
 	bool printDataHEX();
 	bool printDataHeadersHEX();
@@ -195,7 +213,8 @@ public:
 
 	bool setArchiveFlags(bool encrypted, bool compressed, int method, int strength, const std::vector<bool> &additionalFlags);
 	bool setArchiveFlags(const std::vector<bool> &flags);
-	bool getArchiveFlag(int bitIndex, int size, bool &flag);
+	
+        bool getArchiveFlag(int bitIndex, int size, bool &flag);
 	bool getArchiveFlags(std::vector<bool> &flags);
 
 	bool setCommonFlags(bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags);
@@ -209,6 +228,7 @@ public:
 	void setPath(const std::string &path);
 	std::string getPath();
 
+        // debug functions
 	void setMetadata(const std::string &metadata);
 	std::string getMetadata();
 

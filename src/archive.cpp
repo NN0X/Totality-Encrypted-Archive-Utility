@@ -28,7 +28,7 @@ void TEA::init()
 
         mArchiveHeader.mNumFiles = 0;
         mArchiveHeader.mPosDataHeaders = 0;
-        mArchiveHeader.mNumUniqueFlags = 7; // default number of bits used for flags
+        mArchiveHeader.mNumUniqueFlags = TEA_FLAGS_RESERVED_START_BIT;
         mArchiveHeader.mPosCommonFlags = 0;
         mArchiveHeader.mSizeMetadata = 0;
         mArchiveHeader.mPosMetadata = 0;
@@ -37,15 +37,15 @@ void TEA::init()
 
         mDataHeader.mPosEndFileHeaders = 0;
         mDataHeader.mFileHeadersCached = std::vector<FileHeader>();
-        mDataHeader.mFileHeadersCached.reserve(1024);
+        mDataHeader.mFileHeadersCached.reserve(DEFAULT_CACHE_SIZE);
         mDataHeader.mPosFileHeaders = std::vector<uint64_t>();
-        mDataHeader.mPosFileHeaders.reserve(1024);
+        mDataHeader.mPosFileHeaders.reserve(DEFAULT_CACHE_SIZE);
 
         mDataCached = std::vector<uint8_t>();
-        mDataCached.reserve(1024);
+        mDataCached.reserve(DEFAULT_CACHE_SIZE);
 
         mCommonFlagsCached = std::vector<uint8_t>();
-        mCommonFlagsCached.reserve(1024);
+        mCommonFlagsCached.reserve(DEFAULT_CACHE_SIZE);
 
         mMetadata = "";
 
@@ -155,7 +155,7 @@ bool TEA::load()
                 return false;
         }
 
-        if (archiveSize < 42 + 2 * 3 + 1 + 7 * 1) // 42 for header, 2 * 3 for signature, 1 for version, 7 * 1 for padding
+        if (archiveSize < TEA_HEADER_SIZE + 2 * TEA_SIGNATURE_SIZE + 7 * TEA_PADDING_SIZE + TEA_VERSION_SIZE)
         {
                 std::cerr << "Invalid archive size\n";
                 return false;
@@ -163,15 +163,15 @@ bool TEA::load()
 
         // load 3 signature bytes and check if they match
         std::string signature;
-        signature.resize(3);
-        archive.read(&signature[0], 3);
+        signature.resize(TEA_SIGNATURE_SIZE);
+        archive.read(&signature[0], TEA_SIGNATURE_SIZE);
         if (signature != TEA_SIGNATURE)
         {
                 std::cerr << "Invalid signature\n";
                 return false;
         }
         // skip 1 byte padding
-        archive.seekg(1, std::ios::cur);
+        archive.seekg(TEA_PADDING_SIZE, std::ios::cur);
 
         // check version
         uint8_t version;
@@ -182,12 +182,12 @@ bool TEA::load()
                 return false;
         }
 
-        archive.seekg(-3, std::ios::end);
+        archive.seekg(-TEA_SIGNATURE_SIZE, std::ios::end);
 
         // check signature at the end of the file
         std::string signatureEnd;
-        signatureEnd.resize(3);
-        archive.read(&signatureEnd[0], 3);
+        signatureEnd.resize(TEA_SIGNATURE_SIZE);
+        archive.read(&signatureEnd[0], TEA_SIGNATURE_SIZE);
         if (signatureEnd != TEA_SIGNATURE)
         {
                 std::cerr << "Invalid signature\n";
@@ -195,7 +195,8 @@ bool TEA::load()
         }
 
         // read archive header
-        archive.seekg(archiveSize - 42 - 4, std::ios::beg);
+        const int offsetFromEndToArchiveHeader = TEA_HEADER_SIZE + TEA_PADDING_SIZE + TEA_SIGNATURE_SIZE;
+        archive.seekg(archiveSize - offsetFromEndToArchiveHeader, std::ios::beg);
         archive.read(reinterpret_cast<char*>(&mArchiveHeader.mNumFiles), sizeof(uint64_t));
         archive.read(reinterpret_cast<char*>(&mArchiveHeader.mPosDataHeaders), sizeof(uint64_t));
         archive.read(reinterpret_cast<char*>(&mArchiveHeader.mNumUniqueFlags), sizeof(uint16_t));
@@ -221,11 +222,13 @@ bool TEA::load()
         // create data.teatemp
         uint64_t offset = 0;
         std::ofstream dataTemp(".data.teatemp", std::ios::binary);
+
+        const int offsetFromBeginToData = TEA_SIGNATURE_SIZE + 2 * TEA_PADDING_SIZE + TEA_VERSION_SIZE;
         if (dataTemp.is_open())
         {
-                archive.seekg(6, std::ios::beg);
-                uint64_t endData = mArchiveHeader.mPosDataHeaders - 1;
-                uint64_t dataSize = endData - 6;
+                archive.seekg(offsetFromBeginToData, std::ios::beg);
+                uint64_t endData = mArchiveHeader.mPosDataHeaders - TEA_PADDING_SIZE;
+                uint64_t dataSize = endData - offsetFromBeginToData;
                 offset = dataSize;
                 if (!moveFileDataInPlace(archive, dataTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
@@ -268,9 +271,11 @@ bool TEA::load()
 
         // create data_headers_positions.teatemp
         std::ofstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
+
+        const int offsetFromDataHeadersToDataHeadersPositions = sizeof(uint64_t);
         if (dataHeadersPositionsTemp.is_open())
         {
-                archive.seekg(8, std::ios::beg);
+                archive.seekg(offsetFromDataHeadersToDataHeadersPositions, std::ios::beg);
                 uint64_t dataSize = mArchiveHeader.mNumFiles * sizeof(uint64_t);
                 offset += dataSize;
                 if (!moveFileDataInPlace(archive, dataHeadersPositionsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
@@ -290,11 +295,14 @@ bool TEA::load()
 
         // create common_flags.teatemp
         std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
+
+        const double bitsPerByteFloating = 8.0;
+        const double half = 0.5;
         if (commonFlagsTemp.is_open())
         {
                 archive.seekg(mArchiveHeader.mPosCommonFlags - offset, std::ios::beg);
-                float commonFlagsSizeFloating = (mArchiveHeader.mNumFiles * mArchiveHeader.mNumUniqueFlags) / 8.0;
-                uint64_t dataSize = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
+                float commonFlagsSizeFloating = (mArchiveHeader.mNumFiles * mArchiveHeader.mNumUniqueFlags) / bitsPerByteFloating;
+                uint64_t dataSize = static_cast<uint64_t>(commonFlagsSizeFloating + half);
                 offset += dataSize;
                 if (!moveFileDataInPlace(archive, commonFlagsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
@@ -331,7 +339,7 @@ bool TEA::save()
         }
 
         // write signature
-        archive.write(TEA_SIGNATURE, 3);
+        archive.write(TEA_SIGNATURE, TEA_SIGNATURE_SIZE);
         archive.put(0);
         // write version
         archive.put(TEA_VERSION);
@@ -464,7 +472,7 @@ bool TEA::save()
         archive.put(0);
 
         // write signature at the end of the file
-        archive.write(TEA_SIGNATURE, 3);
+        archive.write(TEA_SIGNATURE, TEA_SIGNATURE_SIZE);
 
         archive.close();
 
@@ -543,6 +551,9 @@ FileSearch findFile(const std::string &archiveInternalPath, uint64_t numUniqueFl
                 indexTemp = 0;
         }
 
+        const uint8_t directoryBit = 0b00000010;
+        const double bitsPerByteFloating = 8.0;
+        const double half = 0.5;
         for (uint64_t i = indexTemp; i < parts.size() - 1; i++)
         {
                 // check if file exists
@@ -565,13 +576,13 @@ FileSearch findFile(const std::string &archiveInternalPath, uint64_t numUniqueFl
                         if (name == parts[i] && posParentTemp == posParent)
                         {
                                 // check if directory
-                                float commonFlagsSizeFloating = (numUniqueFlags) / 8.0;
-                                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
+                                float commonFlagsSizeFloating = (numUniqueFlags) / bitsPerByteFloating;
+                                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + half);
                                 std::vector<uint8_t> flags(bytesFlags);
                                 commonFlagsTemp.seekg(j * bytesFlags, std::ios::beg);
                                 commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
                                 uint8_t defaultFlags = flags[0];
-                                directory = defaultFlags & 0b00000010;
+                                directory = defaultFlags & directoryBit; // check if directory
                                 if (!directory)
                                 {
                                         std::cerr << parts[i] << " is not a directory\n";
@@ -615,13 +626,13 @@ FileSearch findFile(const std::string &archiveInternalPath, uint64_t numUniqueFl
                 if (name == parts[parts.size() - 1] && posParentTemp == posParent)
                 {
                         // check if directory
-                        float commonFlagsSizeFloating = (numUniqueFlags) / 8.0;
-                        uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
+                        float commonFlagsSizeFloating = (numUniqueFlags) / bitsPerByteFloating;
+                        uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + half);
                         std::vector<uint8_t> flags(bytesFlags);
                         commonFlagsTemp.seekg(j * bytesFlags, std::ios::beg);
                         commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
                         uint8_t defaultFlags = flags[0];
-                        fileSearch.mDirectory = defaultFlags & 0b00000010;
+                        fileSearch.mDirectory = defaultFlags & directoryBit; // check if directory
                         fileSearch.mFound = true;
                         break;
                 }
@@ -674,7 +685,7 @@ bool addFileHeader(FileHeader &fileHeader, uint64_t *pos)
 
 bool addFlags(uint64_t numUnique , bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags)
 {
-        if (additionalFlags.size() != numUnique - 7)
+        if (additionalFlags.size() != numUnique - TEA_FLAGS_RESERVED_START_BIT)
         {
                 std::cerr << "Invalid number of additional flags\n";
                 return false;
@@ -682,30 +693,45 @@ bool addFlags(uint64_t numUnique , bool encrypted, bool compressed, int method, 
 
         std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary | std::ios::in | std::ios::out);
 
-        // TODO: check if flags are correct
+        const double bitsPerByteFloating = 8.0;
+        const double half = 0.5;
+        const int encrypedSizeOffset = TEA_ENCRYPTED_SIZE - 1;
+        const int compressedSizeOffset = TEA_COMPRESSED_SIZE - 1;
+        const int compressionTypeSizeOffset = TEA_COMPRESSION_TYPE_SIZE - 1;
+        const int compressionStrengthSizeOffset = TEA_COMPRESSION_STRENGTH_SIZE - 1;
+        const int directorySizeOffset = TEA_DIRECTORY_SIZE - 1;
+
+        const int encryptedShift = TEA_FLAGS_RESERVED_START_BIT - TEA_ENCRYPTED_BIT - encrypedSizeOffset;
+        const int compressedShift = TEA_FLAGS_RESERVED_START_BIT - TEA_COMPRESSED_BIT - compressedSizeOffset;
+        const int compressionTypeShift = TEA_FLAGS_RESERVED_START_BIT - TEA_COMPRESSION_TYPE_BIT - compressionTypeSizeOffset;
+        const int compressionStrengthShift = TEA_FLAGS_RESERVED_START_BIT - TEA_COMPRESSION_STRENGTH_BIT - compressionStrengthSizeOffset;
+        const int directoryShift = TEA_FLAGS_RESERVED_START_BIT - TEA_DIRECTORY_BIT - directorySizeOffset;
+
+        const int bitsPerByte = 8;
+        // TODO: test if this works
         if (commonFlagsTemp.is_open())
         {
                 commonFlagsTemp.seekp(0, std::ios::end);
-                float commonFlagsSizeFloating = (numUnique) / 8.0;
-                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
+                float commonFlagsSizeFloating = (numUnique) / bitsPerByteFloating;
+                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + half);
                 std::vector<uint8_t> flags(bytesFlags);
                 uint8_t defaultFlags = 0;
-                defaultFlags |= encrypted << 7;
-                defaultFlags |= compressed << 6;
-                defaultFlags |= method << 4;
-                defaultFlags |= strength << 2;
-                defaultFlags |= directory << 1;
+                defaultFlags |= encrypted << encryptedShift; // 7
+                defaultFlags |= compressed << compressedShift; // 6
+                defaultFlags |= method << compressionTypeShift; // 4
+                defaultFlags |= strength << compressionStrengthShift; // 2
+                defaultFlags |= directory << directoryShift; // 1
 
                 if (additionalFlags.size() != 0)
                 {
                         defaultFlags |= additionalFlags[0];
                 }
                 flags[0] = defaultFlags;
-                uint64_t i = 1;
+                uint64_t i = 1; // start from 1 because 0 is default flags
                 for (uint64_t j = 1; j < additionalFlags.size(); j++)
                 {
-                        flags[i] |= additionalFlags[j] << (7 - j % 8);
-                        if (j % 8 == 0)
+                        flags[i] |= additionalFlags[j] << (j % bitsPerByte);
+                        if (j % bitsPerByte == 0)
                         {
                                 i++;
                         }
@@ -965,8 +991,8 @@ bool TEA::info()
         std::cout << "Number of files: " << mArchiveHeader.mNumFiles << "\n";
         std::cout << "Metadata: " << mMetadata << "\n";
         // cout flags in binary format
-        std::cout << "Global flags: " << std::bitset<16>(mArchiveHeader.mGlobalFlags) << "\n";
-        std::cout << "Reserved: " << std::bitset<32>(mArchiveHeader.mReserved) << "\n";
+        std::cout << "Global flags: " << std::bitset<TEA_GLOBAL_FLAGS_SIZE_BITS>(mArchiveHeader.mGlobalFlags) << "\n";
+        std::cout << "Reserved: " << std::bitset<TEA_RESERVED_SIZE_BITS>(mArchiveHeader.mReserved) << "\n";
 
         return true;
 }

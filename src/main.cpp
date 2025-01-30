@@ -9,6 +9,8 @@
 
 int main()
 {
+        // TODO: test move file in place functions (consider splitting them into another project)
+
 	TEA archive(".", "archive");
 
 	if (archive.add("", "test1", false, false, 0, 0, true, {}))
@@ -31,10 +33,6 @@ int main()
 
 	archive.setMetadata("metadata");
 
-	// BUG: weird behavior when adding file to directory with path containing existing directory
-	// BUG: for some reason the behavior is not consistent
-	// TODO: change root id from 0 to 0xFFFFFFFFFFFFFFFF (max value of uint64_t) to avoid conflicts with other ids and free up 0 for the file at position 0 to simplify the code by getting rid of required offset
-	
 	if (archive.add("resources/file1.txt", "test1/test2/file2", false, false, 0, 0, false, {}))
 	{
 		std::cout << "File added successfully!" << std::endl;
