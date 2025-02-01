@@ -1,5 +1,7 @@
 #include <vector>
 #include <cstdint>
+#include <string>
+#include <unordered_map>
 
 // TEA Format:
 //
@@ -84,6 +86,13 @@
 #define TEA_GLOBAL_FLAGS_SIZE_BITS 16
 #define TEA_RESERVED_SIZE_BITS 32
 
+#define TEA_FILE_FLAGS_SIZE_BITS 8
+#define TEA_FILE_RESERVED_SIZE_BITS 8
+#define TEA_DIRECTORY_TYPE_NAME "DIR"
+#define TEA_FILE_TYPE_NAME "FILE"
+
+const std::string sizeUnits[] = {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
+
 // temporary defines that should be computed during runtime based on available system information
 #define DEFAULT_CHUNK_SIZE 1024
 #define DEFAULT_CACHE_SIZE 1024
@@ -154,7 +163,7 @@ struct FileHeader
 struct DataHeader
 {
 	uint64_t mPosEndFileHeaders;
-	std::vector<FileHeader> mFileHeadersCached;
+        std::unordered_map<uint64_t, FileHeader> mFileHeadersCached;
 	std::vector<uint64_t> mPosFileHeaders;
 };
 

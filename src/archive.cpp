@@ -36,7 +36,7 @@ void TEA::init()
         mArchiveHeader.mReserved = 0;
 
         mDataHeader.mPosEndFileHeaders = 0;
-        mDataHeader.mFileHeadersCached = std::vector<FileHeader>();
+        mDataHeader.mFileHeadersCached = std::unordered_map<uint64_t, FileHeader>();
         mDataHeader.mFileHeadersCached.reserve(DEFAULT_CACHE_SIZE);
         mDataHeader.mPosFileHeaders = std::vector<uint64_t>();
         mDataHeader.mPosFileHeaders.reserve(DEFAULT_CACHE_SIZE);
@@ -487,19 +487,18 @@ bool TEA::save()
         return true;
 }
 
-// TODO: test if epoch time is correct
 uint64_t getFileModEpochTime(const std::string &path)
 {
         std::filesystem::file_time_type time = std::filesystem::last_write_time(path);
-        uint64_t modTimeInEpoch = time.time_since_epoch().count();
+        auto modTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(time - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+        uint64_t modTimeInEpoch = std::chrono::duration_cast<std::chrono::seconds>(modTime.time_since_epoch()).count();
         return modTimeInEpoch;
 }
 
 uint64_t getCurrentEpochTime()
 {
-        std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-        std::chrono::duration<double> duration = now.time_since_epoch();
-        return duration.count();
+        auto time = std::chrono::system_clock::now().time_since_epoch();
+        return std::chrono::duration_cast<std::chrono::seconds>(time).count();
 }
 
 struct FileSearch
@@ -592,11 +591,11 @@ FileSearch findFile(const std::string &archiveInternalPath, uint64_t numUniqueFl
                                 posParent = pos;
                                 break;
                         }
-                        else if (name == parts[i] && posParentTemp != posParent)
-                        {
-                                std::cerr << "Invalid path\n";
-                                break;
-                        }
+                        //else if (name == parts[i] && posParentTemp != posParent)
+                        //{
+                        //        std::cerr << "Invalid path\n";
+                        //        break;
+                        //}
                 }
                 if (!found)
                 {
@@ -922,7 +921,20 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
         return true;
 }
 
-// TODO: implement file structure into list
+bool padToRight(std::string &str, uint64_t size)
+{
+        if (str.size() > size)
+        {
+                return false;
+        }
+        else if (str.size() == size)
+        {
+                return true;
+        }
+        str = str + std::string(size - str.size(), ' ');
+        return true;
+}
+
 bool TEA::list()
 {
         std::ifstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
@@ -931,6 +943,10 @@ bool TEA::list()
 
         if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
         {
+                std::cout << "Listing files in archive " << mName << ":\n\n";
+                std::cout << " path" + std::string(32 - 5, ' ') + "type" + std::string(8 - 4, ' ') + "size" + std::string(8 - 4, ' ') + "time" + std::string(16 - 4, ' ') + "flags" + std::string(TEA_FILE_FLAGS_SIZE_BITS - 5, ' ') + " reserved\n";
+                std::cout << std::string(32 + 8 + 8 + 16 + TEA_FILE_FLAGS_SIZE_BITS + TEA_FILE_RESERVED_SIZE_BITS + 2, '-') << "\n";
+
                 uint64_t pos;
                 float commonFlagsSizeFloating = mArchiveHeader.mNumUniqueFlags / 8.0;
                 uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
@@ -950,25 +966,96 @@ bool TEA::list()
                         dataHeadersTemp.read(reinterpret_cast<char*>(&fileHeader.mReserved), sizeof(uint8_t));
                         commonFlagsTemp.seekg(i * bytesFlags, std::ios::beg);
                         commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
-                        std::cout << fileHeader.mName << "\n";
-                        std::cout << "\tSize: " << fileHeader.mSizeData << "\n";
+
+                        std::string path = "";
+                        int maxDepth = 10;
+                        int depth = 0;
+                        uint64_t posParent = fileHeader.mPosParent;
                         if (fileHeader.mPosParent != ROOT)
                         {
-                                std::cout << "\tParent position: " << fileHeader.mPosParent << "\n";
+                                while (posParent != ROOT && depth < maxDepth)
+                                {
+                                        if (mDataHeader.mFileHeadersCached.find(posParent) != mDataHeader.mFileHeadersCached.end())
+                                        {
+                                                path = mDataHeader.mFileHeadersCached[posParent].mName + "/" + path;
+                                                posParent = mDataHeader.mFileHeadersCached[posParent].mPosParent;
+                                        }
+                                        else
+                                        {
+                                                std::cerr << "Parent not found\n";
+                                                break;
+                                        }
+                                        depth++;
+                                }
+                        }
+                        if (path.size() > 25)
+                        {
+                                int index = 0;
+                                while (path.find("/", index) != std::string::npos)
+                                {
+                                        path = path.substr(index);
+                                        if (path.size() <= 22)
+                                        {
+                                                break;
+                                        }
+                                        index = path.find("/", index) + 1;
+                                }
+                                path = "..." + path;
+                        }
+                        else if (depth == maxDepth && posParent != ROOT)
+                        {
+                                path = "..." + path;
                         }
                         else
                         {
-                                std::cout << "\tParent: root\n";
+                                path = "/" + path;
                         }
-                        std::cout << "\tData offset: " << fileHeader.mOffsetData << "\n";
-                        std::cout << "\tModification time: " << fileHeader.mEpochModTime << "\n";
-                        std::cout << "\tFlags: ";
-                        for (uint64_t j = 0; j < bytesFlags; j++)
+
+                        path += fileHeader.mName;
+
+                        uint64_t sizeHumanReadable = fileHeader.mSizeData;
+                        int unit = 0;
+                        while (sizeHumanReadable >= 1024)
                         {
-                                std::cout << std::bitset<8>(flags[j]) << " ";
+                                sizeHumanReadable /= 1024;
                         }
-                        std::cout << "\n";
-                        std::cout << "\tReserved: " << std::hex << fileHeader.mReserved << "\n" << std::dec;
+
+                        bool isDirectory = flags[0] & 0b00000010;
+
+                        std::string pathPadded = path;
+                        if (!padToRight(pathPadded, 32))
+                        {
+                                std::cerr << "Failed to pad path\n";
+                        }
+                        std::string typePadded = isDirectory ? TEA_DIRECTORY_TYPE_NAME : TEA_FILE_TYPE_NAME;
+                        if (!padToRight(typePadded, 8))
+                        {
+                                std::cerr << "Failed to pad type\n";
+                        }
+                        std::string sizePadded = isDirectory ? "" : std::to_string(sizeHumanReadable) + sizeUnits[unit];
+                        if (!padToRight(sizePadded, 8))
+                        {
+                                std::cerr << "Failed to pad size\n";
+                        }
+                        std::string timePadded = std::to_string(fileHeader.mEpochModTime);
+                        if (!padToRight(timePadded, 16))
+                        {
+                                std::cerr << "Failed to pad time\n";
+                        }
+                        std::string flagsPadded = std::bitset<TEA_FILE_FLAGS_SIZE_BITS>(flags[0]).to_string();
+                        if (!padToRight(flagsPadded, TEA_FILE_FLAGS_SIZE_BITS))
+                        {
+                                std::cerr << "Failed to pad flags\n";
+                        }
+                        std::string reservedPadded = std::bitset<TEA_FILE_RESERVED_SIZE_BITS>(fileHeader.mReserved).to_string();
+                        if (!padToRight(reservedPadded, TEA_FILE_RESERVED_SIZE_BITS))
+                        {
+                                std::cerr << "Failed to pad reserved\n";
+                        }
+
+                        std::cout << pathPadded << typePadded << sizePadded << timePadded << flagsPadded << " " << reservedPadded << "\n";
+
+                        mDataHeader.mFileHeadersCached[pos] = fileHeader;
                 }
         }
         else
@@ -981,6 +1068,13 @@ bool TEA::list()
         dataHeadersPositionsTemp.close();
         commonFlagsTemp.close();
 
+        std::cout << "\n";
+
+        return true;
+}
+
+bool TEA::tree()
+{
         return true;
 }
 

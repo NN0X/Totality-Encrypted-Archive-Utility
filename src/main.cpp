@@ -42,6 +42,15 @@ int main()
 		std::cout << "Failed to add file!" << std::endl;
 	}
 
+        if (archive.add("resources/file1.txt", "dir1/dir2/dir3/dir4/dir5/dir6/file3", false, false, 0, 0, false, {}))
+        {
+                std::cout << "File added successfully!" << std::endl;
+        }
+        else
+        {
+                std::cout << "Failed to add file!" << std::endl;
+        }
+
 	archive.info();
 	archive.list();
 
