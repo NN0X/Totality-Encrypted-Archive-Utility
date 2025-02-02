@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <chrono>
 #include <bitset>
+#include <algorithm>
 
 #include "archive.h"
 
@@ -941,9 +942,9 @@ bool TEA::list()
         std::ifstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
         std::ifstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
 
-        if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
+        if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open() && commonFlagsTemp.is_open())
         {
-                std::cout << "Listing files in archive " << mName << ":\n\n";
+                std::cout << "Listing files in archive '" << mName << "':\n\n";
                 std::cout << " path" + std::string(32 - 5, ' ') + "type" + std::string(8 - 4, ' ') + "size" + std::string(8 - 4, ' ') + "time" + std::string(16 - 4, ' ') + "flags" + std::string(TEA_FILE_FLAGS_SIZE_BITS - 5, ' ') + " reserved\n";
                 std::cout << std::string(32 + 8 + 8 + 16 + TEA_FILE_FLAGS_SIZE_BITS + TEA_FILE_RESERVED_SIZE_BITS + 2, '-') << "\n";
 
@@ -1056,6 +1057,7 @@ bool TEA::list()
                         std::cout << pathPadded << typePadded << sizePadded << timePadded << flagsPadded << " " << reservedPadded << "\n";
 
                         mDataHeader.mFileHeadersCached[pos] = fileHeader;
+                        // TODO: check for cache overflow and clear if needed
                 }
         }
         else
@@ -1073,8 +1075,136 @@ bool TEA::list()
         return true;
 }
 
+struct FileNode
+{
+        std::string mName;
+        std::vector<uint64_t> mChildrenKeys;
+};
+
+/*
+Example file tree:
+
+         /
+         ├── file1
+         ├── file2
+         ├── dir1
+         |  ├── file3
+         |  └── dir2
+         |     ├── file4
+         |     └── file5
+         └── dir3
+            └── file6
+*/
+
+void printSubTree(uint64_t key, std::unordered_map<uint64_t, FileNode> &fileNodes, int depth, bool lastNode, std::vector<int> &depthsContinuing)
+{
+        const std::string BRANCH = "├──";
+        const std::string BRANCH_LAST = "└──";
+        const std::string TRUNK = "│";
+        const std::string DOUBLE_SPACE = "  ";
+        const std::string TRIPLE_SPACE = "   ";
+
+        FileNode fileNode = fileNodes[key];
+        std::string prefix;
+        for (size_t i = 0; i < depth; i++)
+        {
+                if (std::find(depthsContinuing.begin(), depthsContinuing.end(), i) != depthsContinuing.end())
+                {
+                        prefix += TRUNK + DOUBLE_SPACE;
+                }
+                else
+                {
+                        prefix += TRIPLE_SPACE;
+                }
+        }
+        prefix += lastNode ? BRANCH_LAST : BRANCH;
+        std::cout << prefix << " " << fileNode.mName << "\n";
+        for (size_t i = 0; i < fileNode.mChildrenKeys.size(); i++)
+        {
+                if (i == fileNode.mChildrenKeys.size() - 1)
+                {
+                        printSubTree(fileNode.mChildrenKeys[i], fileNodes, depth + 1, true, depthsContinuing);
+                }
+                else
+                {
+                        depthsContinuing.push_back(depth + 1);
+                        printSubTree(fileNode.mChildrenKeys[i], fileNodes, depth + 1, false, depthsContinuing);
+                }
+        }
+}
+
 bool TEA::tree()
 {
+        std::ifstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
+        std::ifstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
+
+        FileNode root;
+        root.mName = "/";
+        root.mChildrenKeys = {};
+
+        std::unordered_map<uint64_t, FileNode> fileNodes;
+        fileNodes[ROOT] = root;
+
+        if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
+        {
+                std::cout << "Listing files in archive '" << mName << "':\n\n";
+
+                uint64_t pos;
+                float commonFlagsSizeFloating = mArchiveHeader.mNumUniqueFlags / 8.0;
+                uint64_t bytesFlags = static_cast<uint64_t>(commonFlagsSizeFloating + 0.5);
+                std::vector<uint8_t> flags(bytesFlags);
+                FileHeader fileHeader;
+                for (uint64_t i = 0; i < mArchiveHeader.mNumFiles; i++)
+                {
+                        dataHeadersPositionsTemp.read(reinterpret_cast<char*>(&pos), sizeof(uint64_t));
+                        dataHeadersTemp.seekg(pos, std::ios::beg);
+                        dataHeadersTemp.read(reinterpret_cast<char*>(&fileHeader.mSizeName), sizeof(uint16_t));
+                        fileHeader.mName.resize(fileHeader.mSizeName);
+                        dataHeadersTemp.read(&fileHeader.mName[0], fileHeader.mSizeName);
+                        dataHeadersTemp.seekg(sizeof(uint64_t), std::ios::cur); // skip size of data
+                        dataHeadersTemp.read(reinterpret_cast<char*>(&fileHeader.mPosParent), sizeof(uint64_t));
+
+                        FileNode fileNode;
+                        fileNode.mName = fileHeader.mName;
+                        fileNode.mChildrenKeys = {};
+                        fileNodes[fileHeader.mPosParent].mChildrenKeys.push_back(pos);
+                        fileNodes[pos] = fileNode;
+
+                        mDataHeader.mFileHeadersCached[pos] = fileHeader;
+
+                        if (i > DEFAULT_CACHE_SIZE)
+                        {
+                                std::cerr << "Too many files\n";
+                                break;
+                        }
+                }
+        }
+        else
+        {
+                std::cerr << "Failed to open data headers temp files\n";
+                return false;
+        }
+
+        std::cout << "/\n";
+        for (size_t i = 0; i < fileNodes[ROOT].mChildrenKeys.size(); i++)
+        {
+                if (i == fileNodes[ROOT].mChildrenKeys.size() - 1)
+                {
+                        std::vector<int> depthsContinuing;
+                        printSubTree(fileNodes[ROOT].mChildrenKeys[i], fileNodes, 0, true, depthsContinuing);
+                }
+                else
+                {
+                        std::vector<int> depthsContinuing = {0};
+                        printSubTree(fileNodes[ROOT].mChildrenKeys[i], fileNodes, 0, false, depthsContinuing);
+                }
+        }
+
+        dataHeadersTemp.close();
+        dataHeadersPositionsTemp.close();
+
+        std::cout << "\n";
+
         return true;
 }
 

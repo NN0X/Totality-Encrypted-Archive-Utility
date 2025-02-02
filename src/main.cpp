@@ -10,6 +10,16 @@
 int main()
 {
         // TODO: test move file in place functions (consider splitting them into another project)
+        // TODO: create clean cache function to remove unnecessary data from cache
+        // INFO: file headers cache freeing order:
+        // 1. search and remove file headers that are not in data cache
+        // 2. search and remove file headers that are not directories
+        // 3. search and remove file headers that are directories but have no children
+        // 4. search and remove file headers that are directories but have no children in data cache
+        // 5. search and remove directories with the smallest amount of children
+        // 6. search and remove directories with the smallest amount of children in data cache
+        // 7. search and remove directories furthest from root
+        // 8. remove random file headers
 
 	TEA archive(".", "archive");
 
@@ -52,7 +62,8 @@ int main()
         }
 
 	archive.info();
-	archive.list();
+        archive.list();
+	archive.tree();
 
 	if (archive.save())
 	{
