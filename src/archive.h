@@ -95,7 +95,7 @@
 #define TEA_DIRECTORY_TYPE_NAME "DIR"
 #define TEA_FILE_TYPE_NAME "FILE"
 
-const std::string sizeUnits[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"};
+const std::string sizeUnits[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "?"};
 
 // temporary defines that should be computed during runtime based on available system information
 #define DEFAULT_CHUNK_SIZE 1024*1024       // in bytes (1 MiB)

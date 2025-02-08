@@ -1014,6 +1014,11 @@ bool TEA::list()
                         while (sizeHumanReadable >= 1024)
                         {
                                 sizeHumanReadable /= 1024;
+                                unit++;
+                        }
+                        if (unit >= 9)
+                        {
+                                unit = 9;
                         }
 
                         bool isDirectory = flags[0] & 0b00000010;
@@ -1102,7 +1107,7 @@ void printSubTree(uint64_t key, std::unordered_map<uint64_t, FileNode> &fileNode
 
         FileNode fileNode = fileNodes[key];
         std::string prefix;
-        for (size_t i = 0; i < depth; i++)
+        for (int i = 0; i < depth; i++)
         {
                 if (std::find(depthsContinuing.begin(), depthsContinuing.end(), i) != depthsContinuing.end())
                 {
