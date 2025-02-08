@@ -79,15 +79,6 @@ int main()
                 std::cout << "Failed to add file!" << std::endl;
         }
 
-        if (archive.add("resources/file3.webm", "test1/test2/file4", false, false, 0, 0, false, {}))
-        {
-                std::cout << "File added successfully!" << std::endl;
-        }
-        else
-        {
-                std::cout << "Failed to add file!" << std::endl;
-        }
-
         archive.info();
         archive.list();
         archive.tree();

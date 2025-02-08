@@ -940,8 +940,8 @@ bool TEA::list()
         if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open() && commonFlagsTemp.is_open())
         {
                 std::cout << "Listing files in archive '" << mName << "':\n\n";
-                std::cout << " path" + std::string(32 - 5, ' ') + "type" + std::string(8 - 4, ' ') + "size" + std::string(8 - 4, ' ') + "time" + std::string(16 - 4, ' ') + "flags" + std::string(TEA_FILE_FLAGS_SIZE_BITS - 5, ' ') + " reserved\n";
-                std::cout << std::string(32 + 8 + 8 + 16 + TEA_FILE_FLAGS_SIZE_BITS + TEA_FILE_RESERVED_SIZE_BITS + 2, '-') << "\n";
+                std::cout << " path" + std::string(32 - 5, ' ') + "type" + std::string(8 - 4, ' ') + "size" + std::string(10 - 4, ' ') + "time" + std::string(16 - 4, ' ') + "flags" + std::string(TEA_FILE_FLAGS_SIZE_BITS - 5, ' ') + " reserved\n";
+                std::cout << std::string(32 + 8 + 10 + 16 + TEA_FILE_FLAGS_SIZE_BITS + TEA_FILE_RESERVED_SIZE_BITS + 2, '-') << "\n";
 
                 uint64_t pos;
                 float commonFlagsSizeFloating = mArchiveHeader.mNumUniqueFlags / 8.0;
@@ -1034,7 +1034,7 @@ bool TEA::list()
                                 std::cerr << "Failed to pad type\n";
                         }
                         std::string sizePadded = isDirectory ? "" : std::to_string(sizeHumanReadable) + sizeUnits[unit];
-                        if (!padToRight(sizePadded, 8))
+                        if (!padToRight(sizePadded, 10))
                         {
                                 std::cerr << "Failed to pad size\n";
                         }
