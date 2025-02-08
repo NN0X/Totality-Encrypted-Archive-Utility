@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "archive.h"
+#include "moveInPlace.h"
 
 TEA::TEA(const std::string &path, const std::string &name) : mName(name), mPath(path)
 {
@@ -20,6 +21,11 @@ TEA::~TEA()
         std::remove(".data_headers.teatemp");
         std::remove(".data_headers_positions.teatemp");
         std::remove(".common_flags.teatemp");
+}
+
+// TODO: implement
+void TEA::close()
+{
 }
 
 void TEA::init()
@@ -58,85 +64,6 @@ void TEA::init()
         dataHeadersPositionsTemp.close();
         std::ofstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
         commonFlagsTemp.close();
-}
-
-bool deleteFileChunk(std::fstream& file, uint64_t pos, uint64_t size, const std::string &path)
-{
-        file.seekg(0, std::ios::end);
-        uint64_t fileSize = file.tellg();
-        uint64_t readPos = pos + size;
-        if (readPos > fileSize)
-        {
-                std::cerr << "Invalid position or size\n";
-                return false;
-        }
-        std::vector<uint8_t> data(DEFAULT_CHUNK_SIZE);
-
-        uint64_t remaining = fileSize - pos - size;
-        uint64_t writePos = pos;
-
-        while (remaining > 0)
-        {
-                uint64_t readSize = remaining > DEFAULT_CHUNK_SIZE ? DEFAULT_CHUNK_SIZE : remaining;
-                file.seekg(readPos, std::ios::beg);
-                if (!file.read(reinterpret_cast<char*>(&data[0]), readSize))
-                {
-                        std::cerr << "Failed to read data: " << path << "\n";
-                        return false;
-                }
-                file.seekp(writePos, std::ios::beg);
-                if (!file.write(reinterpret_cast<char*>(&data[0]), readSize))
-                {
-                        std::cerr << "Failed to write data: " << path << "\n";
-                        return false;
-                }
-                readPos += readSize;
-                writePos += readSize;
-                remaining -= readSize;
-        }
-
-        file.close();
-        std::filesystem::resize_file(path, fileSize - size);
-        file.open(path, std::ios::binary | std::ios::in | std::ios::out);
-
-        return true;
-}
-
-bool moveFileDataInPlace(std::fstream &fileOrig, std::ofstream &fileTarget, const std::string &pathOrig, uint64_t dataSize, uint64_t chunkSize)
-{
-        uint64_t pos;
-        for (uint64_t i = 0; i < dataSize; i += chunkSize)
-        {
-                if (dataSize - i < chunkSize)
-                {
-                        std::vector<uint8_t> data(dataSize - i);
-                        fileOrig.read(reinterpret_cast<char*>(&data[0]), dataSize - i);
-                        pos = fileOrig.tellg();
-                        fileOrig.seekg(pos - (dataSize - i), std::ios::beg);
-                        fileTarget.write(reinterpret_cast<char*>(&data[0]), dataSize - i);
-                        if (!deleteFileChunk(fileOrig, fileOrig.tellg(), dataSize - i, pathOrig))
-                        {
-                                std::cerr << "Failed to delete data chunk\n";
-                                return false;
-                        }
-                }
-                else
-                {
-                        std::vector<uint8_t> data(chunkSize);
-                        fileOrig.read(reinterpret_cast<char*>(&data[0]), chunkSize);
-                        pos = fileOrig.tellg();
-                        fileOrig.seekg(pos - chunkSize, std::ios::beg);
-                        fileTarget.write(reinterpret_cast<char*>(&data[0]), chunkSize);
-                        if (!deleteFileChunk(fileOrig, fileOrig.tellg(), chunkSize, pathOrig))
-                        {
-                                std::cerr << "Failed to delete data chunk\n";
-                                return false;
-                        }
-                }
-        }
-
-
-        return true;
 }
 
 bool TEA::load()
@@ -231,7 +158,7 @@ bool TEA::load()
                 uint64_t endData = mArchiveHeader.mPosDataHeaders - TEA_PADDING_SIZE;
                 uint64_t dataSize = endData - offsetFromBeginToData;
                 offset = dataSize;
-                if (!moveFileDataInPlace(archive, dataTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(archive, dataTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data in place\n";
                         return false;
@@ -255,7 +182,7 @@ bool TEA::load()
                 archive.read(reinterpret_cast<char*>(&mDataHeader.mPosEndFileHeaders), sizeof(uint64_t));
                 uint64_t dataSize = mDataHeader.mPosEndFileHeaders;
                 offset += dataSize;
-                if (!moveFileDataInPlace(archive, dataHeadersTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(archive, dataHeadersTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data in place\n";
                         return false;
@@ -279,7 +206,7 @@ bool TEA::load()
                 archive.seekg(offsetFromDataHeadersToDataHeadersPositions, std::ios::beg);
                 uint64_t dataSize = mArchiveHeader.mNumFiles * sizeof(uint64_t);
                 offset += dataSize;
-                if (!moveFileDataInPlace(archive, dataHeadersPositionsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(archive, dataHeadersPositionsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data in place\n";
                         return false;
@@ -305,7 +232,7 @@ bool TEA::load()
                 float commonFlagsSizeFloating = (mArchiveHeader.mNumFiles * mArchiveHeader.mNumUniqueFlags) / bitsPerByteFloating;
                 uint64_t dataSize = static_cast<uint64_t>(commonFlagsSizeFloating + half);
                 offset += dataSize;
-                if (!moveFileDataInPlace(archive, commonFlagsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(archive, commonFlagsTemp, fullPath, dataSize, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data in place\n";
                         return false;
@@ -354,7 +281,7 @@ bool TEA::save()
                 uint64_t size = dataTemp.tellg();
                 archive.seekp(0, std::ios::end);
                 dataTemp.seekg(0, std::ios::beg);
-                if (!moveFileDataInPlace(dataTemp, archive, ".data.teatemp", size, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(dataTemp, archive, ".data.teatemp", size, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data in place\n";
                         return false;
@@ -384,7 +311,7 @@ bool TEA::save()
                 mDataHeader.mPosEndFileHeaders = size;
                 dataHeadersTemp.seekg(0, std::ios::beg);
                 archive.write(reinterpret_cast<char*>(&mDataHeader.mPosEndFileHeaders), sizeof(uint64_t));
-                if (!moveFileDataInPlace(dataHeadersTemp, archive, ".data_headers.teatemp", size, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(dataHeadersTemp, archive, ".data_headers.teatemp", size, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data headers in place\n";
                         return false;
@@ -407,7 +334,7 @@ bool TEA::save()
                 uint64_t size = dataHeadersPositionsTemp.tellg();
                 archive.seekp(0, std::ios::end);
                 dataHeadersPositionsTemp.seekg(0, std::ios::beg);
-                if (!moveFileDataInPlace(dataHeadersPositionsTemp, archive, ".data_headers_positions.teatemp", size, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(dataHeadersPositionsTemp, archive, ".data_headers_positions.teatemp", size, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move data headers positions in place\n";
                         return false;
@@ -434,7 +361,7 @@ bool TEA::save()
                 archive.seekp(0, std::ios::end);
                 mArchiveHeader.mPosCommonFlags = archive.tellp();
                 commonFlagsTemp.seekg(0, std::ios::beg);
-                if (!moveFileDataInPlace(commonFlagsTemp, archive, ".common_flags.teatemp", size, DEFAULT_CHUNK_SIZE))
+                if (!moveFileInPlace(commonFlagsTemp, archive, ".common_flags.teatemp", size, DEFAULT_CHUNK_SIZE))
                 {
                         std::cerr << "Failed to move common flags in place\n";
                         return false;
@@ -486,6 +413,19 @@ bool TEA::save()
         std::cout << "Saved archive to " << mPath << "\n";
 
         return true;
+}
+
+// TODO: implement
+// INFO: use TEA_PADDING to try to recover corrupted archive
+bool TEA::rebuild()
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::manageCache()
+{
+        return false;
 }
 
 uint64_t getFileModEpochTime(const std::string &path)
@@ -748,6 +688,18 @@ bool addFlags(uint64_t numUnique , bool encrypted, bool compressed, int method, 
         return true;
 }
 
+// TODO: implement
+bool TEA::extract(const std::string &archiveInternalPath)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::extract(const std::string &archiveInternalPath, const std::string &path)
+{
+        return false;
+}
+
 bool TEA::add(const std::string &path, const std::string &archiveInternalPath, bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags)
 {
         if (path.empty() && !directory)
@@ -922,6 +874,49 @@ bool TEA::add(const std::string &path, const std::string &archiveInternalPath, b
         return true;
 }
 
+// TODO: implement
+bool TEA::remove(const std::string &archiveInternalPath)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::move(const std::string &archiveInternalPathOld, const std::string &archiveInternalPathNew)
+{
+        return false;
+}
+
+// TODO: implement
+// INFO: TEA::move but with additional steps
+bool TEA::rename(const std::string &archiveInternalPath, const std::string &newName)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::encrypt(int method, const std::vector<uint8_t> &key)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::decrypt(const std::vector<uint8_t> &key)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::compress(int method, int strength)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::decompress()
+{
+        return false;
+}
+
 bool padToRight(std::string &str, uint64_t size)
 {
         if (str.size() > size)
@@ -1078,6 +1073,7 @@ bool TEA::list()
 struct FileNode
 {
         std::string mName;
+        bool mIsDirectory;
         std::vector<uint64_t> mChildrenKeys;
 };
 
@@ -1118,7 +1114,8 @@ void printSubTree(uint64_t key, std::unordered_map<uint64_t, FileNode> &fileNode
                 }
         }
         prefix += lastNode ? BRANCH_LAST : BRANCH;
-        std::cout << prefix << " " << fileNode.mName << "\n";
+        prefix += fileNode.mIsDirectory ? COLOR_LIGHT_BLUE : "";
+        std::cout << prefix << " " << fileNode.mName << COLOR_RESET << "\n";
         for (size_t i = 0; i < fileNode.mChildrenKeys.size(); i++)
         {
                 if (i == fileNode.mChildrenKeys.size() - 1)
@@ -1137,6 +1134,7 @@ bool TEA::tree()
 {
         std::ifstream dataHeadersTemp(".data_headers.teatemp", std::ios::binary);
         std::ifstream dataHeadersPositionsTemp(".data_headers_positions.teatemp", std::ios::binary);
+        std::ifstream commonFlagsTemp(".common_flags.teatemp", std::ios::binary);
 
         FileNode root;
         root.mName = "/";
@@ -1145,7 +1143,7 @@ bool TEA::tree()
         std::unordered_map<uint64_t, FileNode> fileNodes;
         fileNodes[ROOT] = root;
 
-        if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open())
+        if (dataHeadersTemp.is_open() && dataHeadersPositionsTemp.is_open() && commonFlagsTemp.is_open())
         {
                 std::cout << "Listing files in archive '" << mName << "':\n\n";
 
@@ -1163,12 +1161,15 @@ bool TEA::tree()
                         dataHeadersTemp.read(&fileHeader.mName[0], fileHeader.mSizeName);
                         dataHeadersTemp.seekg(sizeof(uint64_t), std::ios::cur); // skip size of data
                         dataHeadersTemp.read(reinterpret_cast<char*>(&fileHeader.mPosParent), sizeof(uint64_t));
+                        commonFlagsTemp.seekg(i * bytesFlags, std::ios::beg);
+                        commonFlagsTemp.read(reinterpret_cast<char*>(&flags[0]), bytesFlags);
 
                         FileNode fileNode;
                         fileNode.mName = fileHeader.mName;
                         fileNode.mChildrenKeys = {};
                         fileNodes[fileHeader.mPosParent].mChildrenKeys.push_back(pos);
                         fileNodes[pos] = fileNode;
+                        fileNodes[pos].mIsDirectory = flags[0] & 0b00000010;
 
                         mDataHeader.mFileHeadersCached[pos] = fileHeader;
 
@@ -1330,9 +1331,60 @@ bool TEA::printCommonFlagsHEX()
         return true;
 }
 
+// TODO: implement
+bool TEA::setArchiveFlags(bool encrypted, bool compressed, int method, int strength, const std::vector<bool> &additionalFlags)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::getArchiveFlag(int bitIndex, int size, bool &flag)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::getArchiveFlags(std::vector<bool> &flags)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::setCommonFlags(bool encrypted, bool compressed, int method, int strength, bool directory, const std::vector<bool> &additionalFlags)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::getCommonFlag(int bitIndex, int size, bool &flag)
+{
+        return false;
+}
+
+// TODO: implement
+bool TEA::getCommonFlags(std::vector<bool> &flags)
+{
+        return false;
+}
+
 void TEA::setName(const std::string &name)
 {
         mName = name;
+}
+
+std::string TEA::getName()
+{
+        return mName;
+}
+
+void TEA::setPath(const std::string &path)
+{
+        mPath = path;
+}
+
+std::string TEA::getPath()
+{
+        return mPath;
 }
 
 // TODO: check if setMetadata works
@@ -1340,4 +1392,29 @@ void TEA::setMetadata(const std::string &metadata)
 {
         mMetadata = metadata;
         mArchiveHeader.mSizeMetadata = metadata.size();
+}
+
+std::string TEA::getMetadata()
+{
+        return mMetadata;
+}
+
+void TEA::setSignature(const std::string &signature)
+{
+        mSignature = signature;
+}
+
+std::string TEA::getSignature()
+{
+        return mSignature;
+}
+
+void TEA::setVersion(uint8_t version)
+{
+        mVersion = version;
+}
+
+uint8_t TEA::getVersion()
+{
+        return mVersion;
 }
