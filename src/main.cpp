@@ -9,6 +9,9 @@
 
 int main()
 {
+        // TODO: consider adding common flags for rwx permissions or just flag for executable
+
+        // TODO: check and fix (or add if not present) cache population in already implemented functions
         // TODO: create clean cache function to remove unnecessary data from cache
         // INFO: file headers cache freeing order: (includes positions of file headers stored in DataHeader struct)
         // 1. search and remove file headers that are not in data cache
